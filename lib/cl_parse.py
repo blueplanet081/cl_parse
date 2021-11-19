@@ -2,15 +2,14 @@
 # -------------------------------------------------------------
 # 簡易コマンドラインパーサー cl_parse       2021/9/21 by te.
 # -------------------------------------------------------------
+import sys
 import glob
 import pathlib
 import platform
 import unicodedata
 from datetime import datetime as dt
 from enum import Enum, EnumMeta, Flag, IntFlag, auto
-from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
-
-# import functools
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, TextIO, Tuple
 
 
 # -------------------------------------------------------------
@@ -20,23 +19,24 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tupl
 # -------------------------------------------------------------
 class Wstr(str):
     def width(self) -> int:
-        ''' 日本語混じり文字列の表示幅を取得する '''
+        """ 日本語混じり文字列の表示幅を取得する
+        """
         len = 0
         for c in self:
             len += 2 if unicodedata.east_asian_width(c) in ('F', 'W', 'A') else 1
         return len
 
     def ljust(self, __width: int, __fillchar: str = ...) -> 'Wstr':     # type: ignore ^^;
-        ''' 日本語混じり文字列を、左寄せ文字詰めする
+        """ 日本語混じり文字列を、左寄せ文字詰めする
             （str.ljust() のワイド文字対応版）
-        '''
+        """
         __fillchar = ' ' if __fillchar == Ellipsis else __fillchar[0:1]
         return Wstr(self + __fillchar*(__width - self.width()))
 
     def tjust(self, tab0: int = 16, tabn: int = 8) -> 'Wstr':
-        ''' 日本語混じり文字列を、タブサイズに左寄せ文字詰めする
+        """ 日本語混じり文字列を、タブサイズに左寄せ文字詰めする
             （tab0:最初のタブサイズ、tabn:その後のタブサイズ）
-        '''
+        """
         num = (self.width() - tab0) // tabn + 1
         return self.ljust(tab0 + tabn * (num if num > 0 else 0))
 
@@ -45,10 +45,10 @@ class Wstr(str):
 # こまかいの（一応汎用）
 # -------------------------------------------------------------
 def split2(text: str, sp: str) -> Tuple[str, Optional[str]]:
-    ''' 文字列をspで２分割してタプルで返す '''
-    ''' セパレータ(sp) 以降が無ければ、ret[1]は空文字、
+    """ 文字列をspで２分割してタプルで返す """
+    """ セパレータ(sp) 以降が無ければ、ret[1]は空文字、
         セパレータ(sp) が存在しなければ、ret[1]は None
-    '''
+    """
     ret: List[Any] = text.split(sp, 1)
     ret = ret + [None]
     return ret[0], ret[1]
@@ -60,24 +60,24 @@ def split2(text: str, sp: str) -> Tuple[str, Optional[str]]:
 # -------------------------------------------------------------
 class F_Stream():
     def __init__(self, sblock: Sequence[Any]) -> None:
-        ''' シーケンスを１要素ずつ取り出すためのクラス
+        """ シーケンスを１要素ずつ取り出すためのクラス
             （先読み機能あり）
-        '''
+        """
         self.buf = sblock
         self.pos: int = 0
         self.len = len(sblock)
 
     def stream(self) -> Iterator[Any]:
-        ''' ストリームから１要素ずつ取り出す（これだけイテレータ）
-        '''
+        """ ストリームから１要素ずつ取り出す（これだけイテレータ）
+        """
         while self.pos < self.len:
             blk = self.buf[self.pos]
             self.pos += 1
             yield blk
 
     def getone(self) -> Sequence[Any]:
-        ''' ストリームから１要素を取り出す。無ければ空要素
-        '''
+        """ ストリームから１要素を取り出す。無ければ空要素
+        """
         blk = self.buf[self.pos:self.pos+1]
         if self.pos < self.len:
             self.pos += 1
@@ -86,9 +86,9 @@ class F_Stream():
         return blk
 
     def getn(self, num: int) -> Sequence[Any]:
-        ''' ストリームからn要素を取り出す。無ければ空要素
+        """ ストリームからn要素を取り出す。無ければ空要素
             （注意：getone() != getn(1) かもしれない？）
-        '''
+        """
         if num <= 0:
             num = 1
         blk = self.buf[self.pos: self.pos + num]
@@ -98,25 +98,25 @@ class F_Stream():
         return blk
 
     def getall(self) -> Sequence[Any]:
-        ''' ストリームの残りの全ての要素を取り出す。無ければ空要素
-        '''
+        """ ストリームの残りの全ての要素を取り出す。無ければ空要素
+        """
         all = self.buf[self.pos:]
         self.pos = self.len
         return all
 
     def peekone(self) -> Sequence[Any]:
-        ''' ストリームの次の１要素を見る。無ければ空要素
+        """ ストリームの次の１要素を見る。無ければ空要素
             （ポインタを進めない）
-        '''
+        """
         blk = self.buf[self.pos:self.pos+1]
         if blk:
             return blk[0]
         return blk
 
     def peekall(self) -> Sequence[Any]:
-        ''' ストリームの残りの全ての要素を見る。無ければ空要素
+        """ ストリームの残りの全ての要素を見る。無ければ空要素
             （ポインタを進めない）
-        '''
+        """
         all = self.buf[self.pos:]
         return all
 
@@ -126,12 +126,12 @@ class F_Stream():
 # -------------------------------------------------------------
 class CheckTurn():
     def __init__(self):
-        ''' ターンをチェックするクラス '''
+        """ ターンをチェックするクラス """
         self.__turn = None                  # 現在のターン
         self.d_turn: Dict[Enum, int] = {}   # ターン回数記録用
 
     def checkTurn(self, turn: Enum) -> bool:
-        ''' ターンの状態をチェックする。前回のターンから変わったら True '''
+        """ ターンの状態をチェックする。前回のターンから変わったら True """
         check = True if turn is not self.__turn else False
         self.__turn = turn
         if check:
@@ -139,16 +139,16 @@ class CheckTurn():
         return check
 
     def getTimes(self, turn: Enum) -> int:
-        ''' そのターンになった回数を返す。初回が 1 '''
+        """ そのターンになった回数を返す。初回が 1 """
         return self.d_turn.get(turn, 0)
 
     def isRepeat(self, turn: Enum) -> bool:
-        ''' そのターンが２回目以降だったら True '''
+        """ そのターンが２回目以降だったら True """
         return self.d_turn.get(turn, 0) > 1
 
 
 class Turn(Enum):
-    ''' cl_parse用、解析のターン（OPT:オプション、ARG:コマンド引数） '''
+    """ cl_parse用、解析のターン（OPT:オプション、ARG:コマンド引数） """
     OPT = auto()    # オプション解析のターン
     ARG = auto()    # コマンド引数解析のターン
 
@@ -162,10 +162,10 @@ isWin = True if platform.system() == 'Windows' else False
 
 
 def __getWild(wild: str) -> List[str]:
-    ''' ホームディレクトリ '~'、ワイルドカードを展開して、リストで返す。
+    """ ホームディレクトリ '~'、ワイルドカードを展開して、リストで返す。
         頭にハイフンが付いているもの、ワイルドカードに展開できないものはそのまま返す
         （その時は、「要素が1つ」のリストになる）
-    '''
+    """
     ret: List[str] = []
     if wild.startswith(' ') or wild.startswith('\\'):
         ret.append(wild[1:])
@@ -184,7 +184,7 @@ def __getWild(wild: str) -> List[str]:
 
 
 def _wArgs(__args: List[str]) -> List[str]:
-    ''' 渡されたリスト中の項目をワイルドカード展開する '''
+    """ 渡されたリスト中の項目をワイルドカード展開する """
     ret: List[str] = []
     for p in __args:
         ret += __getWild(p)
@@ -195,8 +195,8 @@ def _wArgs(__args: List[str]) -> List[str]:
 # ファイル展開モジュール（ほとんど cl_parse専用）
 # -------------------------------------------------------------
 def file_expand(args: List[str]) -> List[str]:
-    ''' リスト中の、”@<ファイル名>" の要素を展開する
-    '''
+    """ リスト中の、”@<ファイル名>" の要素を展開する
+    """
     ret: List[str] = []
     for item in args:
         if item.startswith("@"):
@@ -215,15 +215,15 @@ def file_expand(args: List[str]) -> List[str]:
 # Instant Closureクラス（まあ汎用）
 # ---------------------------------------------------------------------------
 class Mu:
-    ''' Instant Closure クラス
-    '''
+    """ Instant Closure クラス
+    """
     def __init__(self, func: Callable[..., Any], *args: Any, **kwargs: Any):
-        ''' 普通の関数(func)をクロージャーとして埋め込むクラス
-        '''
-        ''' 仕様は functools.partial() とほとんど同じ（多分）だけど、
+        """ 普通の関数(func)をクロージャーとして埋め込むクラス
+        """
+        """ 仕様は functools.partial() とほとんど同じ（多分）だけど、
             埋め込んだ functionを呼び出すときの位置引数の順番が逆
             （呼び出し時の引数が先、埋め込んだ引数が後）
-        '''
+        """
         self.args = args
         self.kwargs = kwargs
         self.func = func
@@ -236,12 +236,12 @@ class Mu:
 
 
 class Mu2:
-    ''' Instant Closure ^2 クラス
-    '''
+    """ Instant Closure ^2 クラス
+    """
     def __init__(self, func: Callable[..., Any], func2: Callable[..., Any], *args: Any, **kwargs: Any):
-        ''' functionと、そこから呼び出すfunctionを一緒に埋め込むクラス
+        """ functionと、そこから呼び出すfunctionを一緒に埋め込むクラス
             （仕様、使い方検討中）
-        '''
+        """
         self.args = args
         self.kwargs = kwargs
         self.func = func
@@ -260,9 +260,9 @@ class Mu2:
 def sepalate_items__(
         moto: str, type: Optional[Callable[[str], Any]] = None,
         sep: str = ',', count: int = 0) -> List[Any]:
-    ''' オプション引数をセパレータ(sep)で指定個数(count)に分割して解釈する。
+    """ オプション引数をセパレータ(sep)で指定個数(count)に分割して解釈する。
         エラー時の処理が cl_parse 用
-    '''
+    """
     motos = moto.split(sep)
     if count != 0 and len(motos) != count:
         raise ValueError(f"sepalate items count error. required {count} / detected {len(motos)} at arg=[{moto}]")
@@ -282,11 +282,11 @@ date = Mu(dt.strptime, '%Y/%m/%d')      # 日付 <年>/<月>/<日> 入力
 # cl_parse 内部使用関数
 # -----------------------------------------------------
 def cnv_enum(atype: EnumMeta, ename: str) -> Any:
-    ''' 列挙型(atype)の「名前(ename)から、列挙型メンバーを作成する
+    """ 列挙型(atype)の「名前(ename)から、列挙型メンバーを作成する
         （Flag、IntFlagの演算子は | のみ解釈）
-    '''
-    ''' 型ヒントをどのように書けば良いのか、模索中 ^^;
-    '''
+    """
+    """ 型ヒントをどのように書けば良いのか、模索中 ^^;
+    """
     wmembers = list(atype.__members__.keys())
     try:
         if atype.__base__ is Flag or IntFlag:
@@ -322,9 +322,9 @@ emsg = {
 # 解析用条件
 # -----------------------------------------------------
 class Smode(Enum):
-    ''' コマンドライン解析モード
+    """ コマンドライン解析モード
         （NONE:全解析、ONEPAIR:1組、OPTFIRST:オプション先、ARGFIRST:コマンド引数先）
-    '''
+    """
     NONE = auto()           # モードなし（全解析）
     ONEPAIR = auto()        # 1組モード（オプションとコマンド引数、1組で終了）
     OPTFIRST = auto()       # オプション先モード（コマンド引数後のオプションは無視）
@@ -336,7 +336,7 @@ class Smode(Enum):
 # -----------------------------------------------------
 class Opset:
     def __init__(self, comment: str, acomment: str, atype: Any) -> None:
-        ''' オプションセット格納用クラス '''
+        """ オプションセット格納用クラス """
         self.__comment = comment        # コメント
         self.__atype = atype            # オプション引数のタイプ
         self.__acomment = acomment      # オプション引数のコメント
@@ -367,7 +367,7 @@ class Parse:
                  file_expand: bool = False,
                  comment_sp: str = '//',
                  debug: bool = False) -> None:
-        ''' 簡易コマンドラインパーサー '''
+        """ 簡易コマンドラインパーサー """
 
         self.__smode = smode            # 解析モード
         self.__winexpand = winexpand    # Windowsで、ワイルドカードを展開するかどうか
@@ -436,8 +436,8 @@ class Parse:
     # オプションセット読み込み処理
     # -----------------------------------------------------
     def __set_options(self, options: List[List[Any]]) -> None:
-        ''' オプションセットを読み込む
-        '''
+        """ オプションセットを読み込む
+        """
         for iopset in options:
             iopset = (iopset + [None] * (5 - len(iopset)))[0:5]
 
@@ -469,8 +469,8 @@ class Parse:
     # コマンドライン解析の本文
     # -----------------------------------------------------
     def __parse(self, args: List[str]) -> None:
-        ''' コマンドラインを解析する
-        '''
+        """ コマンドラインを解析する
+        """
         t = CheckTurn()         # ターンチェック用
 
         if self.__debug:        # デバッグモード指定を取得
@@ -586,8 +586,8 @@ class Parse:
     # 内部処理
     # -----------------------------------------------------
     def __set_value(self, option: str, optarg: Any) -> bool:
-        ''' このオプションのオプション引数を格納する。エラー時には Falseを返す
-        '''
+        """ このオプションのオプション引数を格納する。エラー時には Falseを返す
+        """
         atype = self.atype(option)
         try:
             # 「str」の時はそのまま格納
@@ -609,9 +609,9 @@ class Parse:
             return False
 
     def __complete_l_option(self, opt: Optional[str]) -> str:
-        ''' 入力のオプション（省略形を含む）から、完全なロング名オプションを探す
+        """ 入力のオプション（省略形を含む）から、完全なロング名オプションを探す
             （一致しなければ空文字を返す）
-        '''
+        """
         if not opt:
             return ""
         keep = ""
@@ -624,8 +624,8 @@ class Parse:
 
     def __set_error_reason(self, eno: str, arg: str = "???", opt: str = "???",
                            ext0: str = "ext0", ext1: str = "ext1") -> None:
-        ''' 解析エラーの理由をセットする
-        '''
+        """ 解析エラーの理由をセットする
+        """
         self.__error_reason = {
             "eno": eno, "arg": arg, "opt": opt, "ext0": ext0, "ext1": ext1
         }
@@ -633,8 +633,8 @@ class Parse:
     @staticmethod
     def __error_message(eno: str, arg: str = "???", opt: str = "???",
                         ext0: str = "ext0", ext1: str = "ext1") -> str:
-        ''' 解析エラーメッセージを作成する
-        '''
+        """ 解析エラーメッセージを作成する
+        """
         if eno in emsg.keys():
             return emsg[eno].format(eno=eno, arg=arg, opt=opt, ext0=ext0, ext1=ext1)
         return emsg["E99"].format(eno=eno, arg=arg, opt=opt, ext0=ext0, ext1=ext1)
@@ -643,8 +643,8 @@ class Parse:
     # ユーザ提供メソッド
     # -----------------------------------------------------
     def s_option(self, option: str) -> str:
-        ''' オプション -> 1文字オプションに変換する
-        '''
+        """ オプション -> 1文字オプションに変換する
+        """
         if option in self.l_options:            # 引数のoptionがロング名オプションだったら、
             return self.__ltos[option]          # 1文字オプションを返す
         elif option in self.s_options:          # 1文字オプションだったら、
@@ -653,8 +653,8 @@ class Parse:
         return ""
 
     def l_option(self, option: str) -> str:
-        ''' オプション -> ロング名オプションに変換する
-        '''
+        """ オプション -> ロング名オプションに変換する
+        """
         if option in self.s_options:            # 引数のoptionが１文字オプションだったら、
             return self.__stol[option]          # ロング名オプションを返す
         elif option in self.l_options:          # 引数のoptionがロング名オプションだったら、
@@ -664,80 +664,80 @@ class Parse:
 
     @property
     def l_options(self) -> List[str]:
-        ''' ロング名オプションの一覧 '''
+        """ ロング名オプションの一覧 """
         return self.__l_options
 
     @property
     def s_options(self) -> List[str]:
-        ''' 一文字オプションの一覧 '''
+        """ 一文字オプションの一覧 """
         return self.__s_options
 
     @property
     def options(self) -> List[str]:
-        ''' すべてのオプションの一覧 '''
+        """ すべてのオプションの一覧 """
         return self.l_options + self.s_options
 
     def isEnable(self, option: str) -> bool:
-        ''' このオプションが有効かどうか（指定されたかどうか）を返す '''
+        """ このオプションが有効かどうか（指定されたかどうか）を返す """
         return self.ops[self.s_option(option)].isEnable
 
     def comment(self, option: str) -> str:
-        ''' このオプションのコメントを返す '''
+        """ このオプションのコメントを返す """
         return self.ops[self.s_option(option)].comment
 
     def atype(self, option: str) -> Any:
-        ''' このオプションのオプション引数タイプを返す '''
+        """ このオプションのオプション引数タイプを返す """
         return self.ops[self.s_option(option)].atype
 
     def value(self, option: str) -> Any:
-        ''' このオプションのオプション引数を返す '''
+        """ このオプションのオプション引数を返す """
         return self.ops[self.s_option(option)].value
 
     def acomment(self, option: str) -> str:
-        ''' このオプションのオプション引数のコメントを返す '''
+        """ このオプションのオプション引数のコメントを返す """
         return self.ops[self.s_option(option)].acomment
 
     @property
     def params(self) -> List[str]:
-        ''' 入力されたコマンド引数のリストを返す '''
+        """ 入力されたコマンド引数のリストを返す """
         return self.__params
 
     @property
     def remain(self) -> List[str]:
-        ''' 残りのコマンドラインを返す '''
+        """ 残りのコマンドラインを返す """
         return self.__remain
 
     @property
     def is_error(self) -> bool:
-        ''' 解析エラーで中断時、Trueになる '''
+        """ 解析エラーで中断時、Trueになる """
         return self.__error
 
     def get_errormessage(self, level: int = 0) -> str:
-        ''' 解析エラーが生じた時のエラーメッセージを返す。
-            level=0、1(追加メッセージ含む)、2(全てのメッセージ)
-        '''
+        """ 解析エラーが生じた時のエラーメッセージを返す。
+            level=0、1(追加メッセージ含む)、以下もしかしたら追加予定
+        """
         __message = self.__error_message(**self.__error_reason)
         if level >= 1 and self.__additional_emsg:
             __message += "\n-- " + self.__additional_emsg
         return __message
 
     # -----------------------------------------------------
-    # 以下、デバッグ用ユーティリティ関数
+    # ユーティリティ関数
     # -----------------------------------------------------
-    def show_optionslist(self, tab0: int = 16, tabn: int = 8) -> None:
-        ''' オプション設定一覧を表示する（デバッグ用）
-        '''
+    def show_optionslist(self, tab0: int = 16, tabn: int = 8, file: TextIO = sys.stdout) -> None:
+        """ オプション設定一覧を表示する
+        """
         for opt in self.s_options:
             soption = f"-{opt}, " if len(opt) < 2 else ""
             loption = "--" + self.l_option(opt)
             if self.atype(opt):
                 loption += " " + self.acomment(opt)
             option = soption + loption
-            print(Wstr(option).tjust(tab0, tabn) + f": {self.comment(opt)}")
+            print(Wstr(option).tjust(tab0, tabn) + f": {self.comment(opt)}", file=file)
 
     def show_result(self) -> None:
-        ''' オプション解析結果一覧を表示する（デバッグ用）
-        '''
+        """ オプション解析結果一覧を表示する（デバッグ用）
+        """
         for opt in self.s_options:
             strvalue = str(self.value(opt))
             if type(self.value(opt)) is str:
@@ -747,8 +747,8 @@ class Parse:
 
     @staticmethod
     def show_errormessage() -> None:
-        ''' 解析エラーメッセージ一覧を表示する（デバッグ用）
-        '''
+        """ 解析エラーメッセージ一覧を表示する（デバッグ用）
+        """
         for eno in emsg:
             print(Parse.__error_message(eno,
                         arg="<ARG>", opt="<OPT>", ext0="<EXT0>", ext1="<EXT1>"))
@@ -765,7 +765,7 @@ if __name__ == '__main__':
         PURPLE = RED | GREEN
         WHITE = RED | GREEN | BLUE
 
-    args = 'this.py #2 -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --ext 0x4a4f'.split()
+    args = 'this.py -ac BLUE|RED|GREEN ABC --size 1024x0X40 --exp -ar 0.5 --ext 0x4a4f #'.split()
     # args = sys.argv
 
     # cl_parse 呼び出し用のオプション定義
@@ -785,9 +785,9 @@ if __name__ == '__main__':
 
     # 解析エラー時の処理は自前で行う
     if op.is_error:
-        print(op.get_errormessage(2), file=sys.stderr)
-        print("オプション一覧")
-        op.show_optionslist()
+        print(op.get_errormessage(1), file=sys.stderr)
+        print("オプション一覧", file=sys.stderr)
+        op.show_optionslist(file=sys.stderr)
         exit(1)
 
     # help情報の表示も自前
