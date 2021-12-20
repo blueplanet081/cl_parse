@@ -1,7 +1,7 @@
 import sys
 from enum import Flag, auto
 
-from lib import cl_parse as cl
+from lib import cl_parse_old as cl
 
 # import functools
 
