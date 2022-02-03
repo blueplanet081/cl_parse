@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -------------------------------------------------------------
-# 簡易コマンドラインパーサー cl_parse改の途中   2022/2/2 by te.
+# 簡易コマンドラインパーサー cl_parse改の途中 2021/12/18 by te.
 # -------------------------------------------------------------
 import sys
 import glob
@@ -42,6 +42,18 @@ def _eter_list(anylist: List[Any], eter: Any = ...) -> Iterator[Any]:
     else:                   # eter を繰り返す
         while True:
             yield eter
+
+
+def _maketabline(tablist: List[int], line_width: int = 0) -> str:
+    ''' tablistの目盛りを line_widthの幅だけ表示する
+        （line_width省略時は、tablistの幅だけ）
+    '''
+    _width = sum(tablist) if line_width <= 0 else line_width
+    tabstop = _eter_list(tablist)
+    tabline = ""
+    while(len(tabline) < _width):
+        tabline += '-' * (next(tabstop) - 1) + '+'
+    return tabline
 
 
 def _makeline(line: List[str], tablist: List[int]) -> str:
@@ -94,25 +106,164 @@ def count_prefix(text: str, prefix_char: str, max_count: int = 0) -> int:
 
 
 # -------------------------------------------------------------
-# ストリーム（文字列）から要素（文字）を取り出す勝手ストリーム
-# （一応汎用）
+# シーケンスから要素を取り出す勝手ストリーム（一応汎用）
 # -------------------------------------------------------------
+# class F_Stream():
+#     def __init__(self, sblock: Sequence[Any]) -> None:
+#         """ シーケンスを１要素ずつ取り出すためのクラス
+#             （先読み機能あり）
+#         """
+#         self.buf = sblock
+#         self.pos: int = 0
+#         self.len = len(sblock)
+
+#     def stream(self) -> Iterator[Any]:
+#         """ ストリームから１要素ずつ取り出す（これだけイテレータ）
+#         """
+#         while self.pos < self.len:
+#             blk = self.buf[self.pos]
+#             self.pos += 1
+#             yield blk
+
+#     def getone(self) -> Sequence[Any]:
+#         """ ストリームから１要素を取り出す。無ければ空要素
+#         """
+#         blk = self.buf[self.pos:self.pos+1]
+#         if self.pos < self.len:
+#             self.pos += 1
+#         if blk:
+#             return blk[0]
+#         return blk
+
+#     def getn(self, num: int) -> Sequence[Any]:
+#         """ ストリームからn要素を取り出す。無ければ空要素
+#             （注意：getone() != getn(1) かもしれない？）
+#         """
+#         if num <= 0:
+#             num = 1
+#         blk = self.buf[self.pos: self.pos + num]
+#         self.pos += num
+#         if self.pos > self.len:
+#             self.pos = self.len
+#         return blk
+
+#     def getall(self) -> Sequence[Any]:
+#         """ ストリームの残りの全ての要素を取り出す。無ければ空要素
+#         """
+#         all = self.buf[self.pos:]
+#         self.pos = self.len
+#         return all
+
+#     def peekone(self) -> Sequence[Any]:
+#         """ ストリームの次の１要素を見る。無ければ空要素
+#             （ポインタを進めない）
+#         """
+#         blk = self.buf[self.pos:self.pos+1]
+#         if blk:
+#             return blk[0]
+#         return blk
+
+#     def peekall(self) -> Sequence[Any]:
+#         """ ストリームの残りの全ての要素を見る。無ければ空要素
+#             （ポインタを進めない）
+#         """
+#         all = self.buf[self.pos:]
+#         return all
+
+
+# class B_Stream():
+#     def __init__(self, sblock: List[str]) -> None:
+#         """ List[str] から要素（str）を一つずつ取り出すクラス
+#             （先読み機能あり）
+#         """
+#         self.buf = sblock
+#         self.pos: int = 0
+#         self.len = len(sblock)
+
+#     def stream(self) -> Iterator[str]:
+#         """ List[str] から要素（str）を一つずつ（これだけイテレータ）
+#         """
+#         while self.pos < self.len:
+#             blk = self.buf[self.pos]
+#             self.pos += 1
+#             yield blk
+
+#     def getone(self) -> Optional[str]:
+#         """ List[str] から要素（str）を一つ取り出す（無ければ None）
+#         """
+#         if self.pos < self.len:
+#             ret = self.buf[self.pos]
+#             self.pos += 1
+#             return ret
+#         return None
+
+        # blk = self.buf[self.pos:self.pos+1]
+        # if self.pos < self.len:
+        #     self.pos += 1
+        # if blk:
+        #     return blk[0]
+        # return None
+
+    # def getn(self, num: int) -> Sequence[Any]:
+    #     """ ストリームからn要素を取り出す。無ければ空要素
+    #         （注意：getone() != getn(1) かもしれない？）
+    #     """
+    #     if num <= 0:
+    #         num = 1
+    #     blk = self.buf[self.pos: self.pos + num]
+    #     self.pos += num
+    #     if self.pos > self.len:
+    #         self.pos = self.len
+    #     return blk
+
+    # def getall(self) -> List[str]:
+    #     """ List[str] から残りの全ての要素（str）を取り出す（無ければ空要素）
+    #     """
+    #     all = self.buf[self.pos:]
+    #     self.pos = self.len
+    #     return all
+
+    # def peekone(self) -> Optional[str]:
+    #     """  List[str] から次の１要素を見る（無ければ空要素）
+    #         （ポインタを進めない）
+    #     """
+    #     if self.pos < self.len:
+    #         return self.buf[self.pos]
+    #     return None
+
+        # blk = self.buf[self.pos:self.pos+1]
+        # if blk:
+        #     return blk[0]
+        # return blk
+
+    # def peekall(self) -> Sequence[Any]:
+    #     """ ストリームの残りの全ての要素を見る。無ければ空要素
+    #         （ポインタを進めない）
+    #     """
+    #     all = self.buf[self.pos:]
+    #     return all
+
+
 class C_Stream():
     def __init__(self, sblock: str) -> None:
-        """ 文字列を１文字ずつ取り出すためのクラス（先読み機能あり） """
+        """ 文字列を１文字ずつ取り出すためのクラス
+            （先読み機能あり）
+        """
         self.buf = sblock
         self.pos: int = 0
         self.len = len(sblock)
 
     def stream(self) -> Iterator[str]:
-        """ ストリームから１要素ずつ取り出す（これだけイテレータ） """
+        """ ストリームから１要素ずつ取り出す（これだけイテレータ）
+        """
         while self.pos < self.len:
             blk = self.buf[self.pos]
             self.pos += 1
             yield blk
 
     def getone(self) -> str:
-        """ ストリームから１要素を取り出す（無ければ空文字） """
+        """ ストリームから１要素を取り出す。無ければ空文字
+        """
         if self.pos < self.len:
             ret = self.buf[self.pos]
             self.pos += 1
@@ -120,7 +271,9 @@ class C_Stream():
         return ""
 
     def getn(self, num: int) -> str:
-        """ ストリームからn要素を取り出す（無ければ空文字） """
+        """ ストリームからn要素を取り出す。無ければ空文字
+            （注意：getone() != getn(1) かもしれない？）
+        """
         if num <= 0:
             num = 1
         ret = self.buf[self.pos: self.pos + num]
@@ -130,19 +283,24 @@ class C_Stream():
         return ret
 
     def getall(self) -> str:
-        """ ストリームの残りの全ての要素を取り出す（無ければ空文字） """
+        """ ストリームの残りの全ての要素を取り出す。無ければ空文字
+        """
         all = self.buf[self.pos:]
         self.pos = self.len
         return all
 
     def peekone(self) -> str:
-        """ ストリームの次の１要素を見る（無ければ空文字） """
+        """ ストリームの次の１要素を見る。無ければ空要素
+            （ポインタを進めない）
+        """
         if self.pos < self.len:
             return self.buf[self.pos]
         return ""
 
     def peekall(self) -> str:
-        """ ストリームの残りの全ての要素を見る（無ければ空要素） """
+        """ ストリームの残りの全ての要素を見る。無ければ空要素
+            （ポインタを進めない）
+        """
         return self.buf[self.pos:]
 
 
@@ -218,10 +376,10 @@ def _wArgs(__args: List[str]) -> List[str]:
 
 # -------------------------------------------------------------
 # ファイル展開モジュール（ほとんど cl_parse専用）
-# 使い物になるか（コマンドラインで @xxxx を取得できるか）要検証★★★
 # -------------------------------------------------------------
 def file_expand(args: List[str]) -> List[str]:
-    """ リスト中の、”@<ファイル名>" の要素を展開する """
+    """ リスト中の、”@<ファイル名>" の要素を展開する
+    """
     ret: List[str] = []
     for item in args:
         if item.startswith("@"):
@@ -240,14 +398,15 @@ def file_expand(args: List[str]) -> List[str]:
 # Instant Closureクラス（まあ汎用）
 # ---------------------------------------------------------------------------
 class Mu:
-    """ Instant Closure クラス """
+    """ Instant Closure クラス
+    """
     def __init__(self, func: Callable[..., Any], *args: Any, **kwargs: Any):
-        """ 普通の関数(func)をクロージャーとして埋め込むクラス """
-
-        # 仕様は functools.partial() とほとんど同じ（多分）だけど、
-        # 埋め込んだ functionを呼び出すときの位置引数の順番が逆
-        # （呼び出し時の引数が先、埋め込んだ引数が後）
-
+        """ 普通の関数(func)をクロージャーとして埋め込むクラス
+        """
+        """ 仕様は functools.partial() とほとんど同じ（多分）だけど、
+            埋め込んだ functionを呼び出すときの位置引数の順番が逆
+            （呼び出し時の引数が先、埋め込んだ引数が後）
+        """
         self.args = args
         self.kwargs = kwargs
         self.func = func
@@ -260,9 +419,9 @@ class Mu:
 
 
 class Mu2:
-    """ Instant Closure ^2 クラス """
-    def __init__(self, func: Callable[..., Any],
-                 func2: Callable[..., Any], *args: Any, **kwargs: Any):
+    """ Instant Closure ^2 クラス
+    """
+    def __init__(self, func: Callable[..., Any], func2: Callable[..., Any], *args: Any, **kwargs: Any):
         """ functionと、そこから呼び出すfunctionを一緒に埋め込むクラス
             （仕様、使い方検討中）
         """
@@ -275,8 +434,7 @@ class Mu2:
         return self.func(self.func2, *args2, *self.args, **{**self.kwargs, **kwargs2})
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__} {repr(self.func)} {repr(self.func2)}\
-                 {repr(self.args)} {repr(self.kwargs)}'
+        return f'{self.__class__.__name__} {repr(self.func)} {repr(self.func2)} {repr(self.args)} {repr(self.kwargs)}'
 
 
 # -----------------------------------------------------
@@ -357,6 +515,7 @@ class Smode(Enum):
 
 
 # -----------------------------------------------------
+# cl改用★★★
 # 定義されたオプションセット格納用クラス
 # -----------------------------------------------------
 class Opset:
@@ -369,8 +528,8 @@ class Opset:
         self.__acomment = acomment      # オプション引数のコメント
         self.__atype = atype            # オプション引数のタイプ
 
-        self.__isEnable: bool = False   # オプション有効/無効
-        self.__value: Any = None        # オプション引数
+        self.__isEnable: bool = False     # オプション有効/無効
+        self.__value: Any = None          # オプション引数
 
     @property
     def l_options(self) -> List[str]:
@@ -432,8 +591,9 @@ class Parse:
         self.__option_name_prefix = option_name_prefix
         self.__option_string_prefix = option_string_prefix[0:1]
 
-        self.__debugmode: str = ""              # デバッグモードを格納
+        self.__debugmode: str = ""           # デバッグモードを格納
 
+        # cl改★★★
         self.__options: List[str] = []          # 設定されたオプション属性リスト
         self.__ltoOPS: Dict[str, str] = {}
         self.__stoOPS: Dict[str, str] = {}
@@ -608,20 +768,24 @@ class Parse:
             self.__args = _wArgs(self.__args)
 
         # 解析本文
-        b_args = iter(self.__args)      # コマンドライン（文字列のリスト）をイテレータに
+        # b_args = B_Stream(self.__args)
+        b_args = iter(self.__args)
+        # for arg in b_args.stream():
         for arg in b_args:
             jst = C_Stream(arg)
             if arg.startswith("-"):
                 if arg.startswith("--"):    # ロング名オプションブロック（頭が「--」） ----------------
                     jst.getn(2)
-                    if jst.peekone() == "":     # 「--」のみのブロック
+                    # if jst.peekone() == "":   # 「--」のみのブロック
+                    if jst.peekone() == "":   # 「--」のみのブロック
 
                         if t.checkTurn(Turn.ARG):   # ターンチェック（コマンド引数）
                             if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.ARG)) or \
                                (self.__smode == Smode.ARGFIRST and t.getTimes(Turn.OPT)):
                                 break
-                        wparam = next(b_args, None)     # 次のブロックを取得
-                        if wparam is None:              # 次のブロックが無ければ終了
+                        # if wparam := b_args.getone():
+                        wparam = next(b_args, None)
+                        if wparam is None:
                             break
                         self.__params.append(str(wparam))   # 次のブロックは無条件に「コマンド引数」
                         continue
@@ -639,18 +803,19 @@ class Parse:
 
                         if __ops.atype:     # オプション引数が必要 ---------
                             harg = arg  # for 'E12' error_reason
-                            if oarg is None:                    # オプション引数無し（= 以降が無い）
-                                oarg = next(b_args, None)           # 次のブロックをオプション引数として取得
-                                if oarg is None:                    # それも無ければエラー
+                            if oarg is None:                   # オプション引数無し（= 以降が無い）
+                                # oarg = b_args.getone()     # 次のブロックをオプション引数として取得
+                                oarg = next(b_args, None)      # 次のブロックをオプション引数として取得
+                                if oarg is None:               # それも無ければエラー
                                     self.__set_error_reason('E11', arg=arg)
                                     return
                                 harg = harg + " " + oarg  # for 'E12' error_reason
-                            ret = self.__set_value(__ops, oarg)    # オプション引数を格納
+                            ret = self.__set_value2(__ops, oarg)   # オプション引数を格納
                             if not ret:     # オプション引数格納（変換）エラー
                                 self.__set_error_reason('E12', arg=harg)
                                 return
                         else:                   # オプション引数が不要 ---------
-                            if oarg is not None:                     # オプション引数が不要なのに引数あり
+                            if oarg:                     # オプション引数が不要なのに引数あり
                                 self.__set_error_reason('E13', arg=arg)
                                 return
                     else:       # ロング名オプションが正しくない ----
@@ -672,12 +837,13 @@ class Parse:
                                 oparg = jst.getall()    # 後続文字列からオプション引数を取得
                                 harg = arg  # for 'E22' error_reason
                                 if not oparg:           # 無ければ、
-                                    oparg = next(b_args, None)  # 次のブロックを取得
+                                    # oparg = b_args.getone()     # 次のブロックを取得
+                                    oparg = next(b_args, None)    # 次のブロックを取得
                                     if not oparg:               # それも無ければエラー
                                         self.__set_error_reason('E21', opt=opt, arg=arg)
                                         return
                                     harg = harg + " " + oparg   # for 'E22' error_reason
-                                ret = self.__set_value(__ops, oparg)  # オプション引数を格納
+                                ret = self.__set_value2(__ops, oparg)  # オプション引数を格納
                                 if not ret:     # オプション引数格納（変換）エラー
                                     self.__set_error_reason('E22', opt=opt, arg=harg)
                                     return
@@ -696,11 +862,12 @@ class Parse:
             return
 
         # 途中終了
-        self.__remain = [arg] + [_arg for _arg in b_args]       # 残りのコマンドラインを格納
+        # self.__remain = [arg] + list(b_args.getall())       # 残りのコマンドラインを格納
+        self.__remain = [arg] + [ar for ar in b_args]         # 残りのコマンドラインを格納
         self.__error = False
         return
 
-    def __set_value(self, __ops: Opset, optarg: Any) -> bool:
+    def __set_value2(self, __ops: 'Parse', optarg: Any) -> bool:
         """ このオプションのオプション引数を格納する。エラー時には Falseを返す
         """
         try:
@@ -846,11 +1013,9 @@ class Parse:
         """ オプション解析結果一覧を表示する（デバッグ用） """
         for opt in self.option_attrs:
             op = getattr(self, opt)
-            strvalue = ""
-            if op.atype:
-                strvalue = str(op.value)
-                if type(op.value) is str:
-                    strvalue = "'"+strvalue+"'"     # 文字列(str)なら''で囲って表示する
+            strvalue = str(op.value)
+            if type(op.value) is str:
+                strvalue = "'"+strvalue+"'"     # 文字列(str)なら''で囲って表示する
             print(opt.ljust(12),
                   f"=> {str(op.isEnable).ljust(5)}  {strvalue}")
 

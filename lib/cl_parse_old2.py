@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -------------------------------------------------------------
-# 簡易コマンドラインパーサー cl_parse改の途中   2022/2/2 by te.
+# 簡易コマンドラインパーサー cl_parse改の途中 2021/12/18 by te.
 # -------------------------------------------------------------
 import sys
 import glob
@@ -8,61 +8,36 @@ import pathlib
 import platform
 from datetime import datetime as dt
 from enum import Enum, EnumMeta, Flag, IntFlag, auto
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
-from typing import TextIO
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, TextIO, Tuple
 
 
-# -------------------------------------------------------------
-# 日本語混じり文字列を整形するクラスの一部の超簡易版 for tabprint
-# tabplintが不要なら、両方削ってください。
-# -------------------------------------------------------------
-import unicodedata
-class Wstr(str):
-    def width(self) -> int:
-        """ 日本語混じり文字列の表示幅を取得する """
-        return sum([(2 if unicodedata.east_asian_width(c) in 'FWA' else 1) for c in self])
+# # -------------------------------------------------------------
+# # 日本語混じり文字列を整形するクラスの一部（汎用）
+# # 以下の関数で使っているだけなので、要らなかったら両方削ってください
+# # ->  show_optionslist() オプション設定一覧を表示する（デバッグ用）
+# # -------------------------------------------------------------
+# class Wstr(str):
+#     def width(self) -> int:
+#         """ 日本語混じり文字列の表示幅を取得する
+#         """
+#         len = 0
+#         for c in self:
+#             len += 2 if unicodedata.east_asian_width(c) in ('F', 'W', 'A') else 1
+#         return len
 
-    def ljust(self, __width: int, __fillchar: str = " ") -> 'Wstr':     # type: ignore
-        """ str.ljust() のワイド文字対応版） """
-        return Wstr(self + __fillchar*(__width - self.width()))
+#     def ljust(self, __width: int, __fillchar: str = ...) -> 'Wstr':     # type: ignore ^^;
+#         """ 日本語混じり文字列を、左寄せ文字詰めする
+#             （str.ljust() のワイド文字対応版）
+#         """
+#         __fillchar = ' ' if __fillchar == Ellipsis else __fillchar[0:1]
+#         return Wstr(self + __fillchar*(__width - self.width()))
 
-
-# -------------------------------------------------------------
-# tabprint（付録）
-# -------------------------------------------------------------
-def _eter_list(anylist: List[Any], eter: Any = ...) -> Iterator[Any]:
-    ''' listの要素を無限に繰り返す Iterator。
-        anylistの要素数を越えた場合は、eterを返す。eter省略時は、anylistの最終要素を返す
-    '''
-    for num in anylist:
-        yield num
-    if eter == Ellipsis:    # 最後の要素を繰り返す
-        while True:
-            yield anylist[-1]
-    else:                   # eter を繰り返す
-        while True:
-            yield eter
-
-
-def _makeline(line: List[str], tablist: List[int]) -> str:
-    ''' タブを揃えた文字列（一行分）を作成する '''
-    def _addtab(width: int) -> int:     # 個々のtext幅の、tab揃えの計算
-        w = 0
-        while w <= width:
-            w += next(tabstop)
-        return w
-
-    tabstop = _eter_list(tablist)
-    return ''.join([Wstr(text).ljust(_addtab(Wstr(text).width())) for text in line]).rstrip()
-
-
-def tabprint(table: List[List[str]], tablist: List[int] = [8],
-             file: TextIO = sys.stdout):
-    ''' 単純タブ揃え表示
-        （table中の各lineの、各項目を直近のタブに揃えて表示する）
-    '''
-    for line in table:
-        print(_makeline(line, tablist), file=file)
+#     def tjust(self, tab0: int = 16, tabn: int = 8) -> 'Wstr':
+#         """ 日本語混じり文字列を、タブサイズに左寄せ文字詰めする
+#             （tab0:最初のタブサイズ、tabn:その後のタブサイズ）
+#         """
+#         num = (self.width() - tab0) // tabn + 1
+#         return self.ljust(tab0 + tabn * (num if num > 0 else 0))
 
 
 # -------------------------------------------------------------
@@ -94,56 +69,69 @@ def count_prefix(text: str, prefix_char: str, max_count: int = 0) -> int:
 
 
 # -------------------------------------------------------------
-# ストリーム（文字列）から要素（文字）を取り出す勝手ストリーム
-# （一応汎用）
+# シーケンスから要素を取り出す勝手ストリーム（一応汎用）
 # -------------------------------------------------------------
-class C_Stream():
-    def __init__(self, sblock: str) -> None:
-        """ 文字列を１文字ずつ取り出すためのクラス（先読み機能あり） """
+class F_Stream():
+    def __init__(self, sblock: Sequence[Any]) -> None:
+        """ シーケンスを１要素ずつ取り出すためのクラス
+            （先読み機能あり）
+        """
         self.buf = sblock
         self.pos: int = 0
         self.len = len(sblock)
 
-    def stream(self) -> Iterator[str]:
-        """ ストリームから１要素ずつ取り出す（これだけイテレータ） """
+    def stream(self) -> Iterator[Any]:
+        """ ストリームから１要素ずつ取り出す（これだけイテレータ）
+        """
         while self.pos < self.len:
             blk = self.buf[self.pos]
             self.pos += 1
             yield blk
 
-    def getone(self) -> str:
-        """ ストリームから１要素を取り出す（無ければ空文字） """
+    def getone(self) -> Sequence[Any]:
+        """ ストリームから１要素を取り出す。無ければ空要素
+        """
+        blk = self.buf[self.pos:self.pos+1]
         if self.pos < self.len:
-            ret = self.buf[self.pos]
             self.pos += 1
-            return ret
-        return ""
+        if blk:
+            return blk[0]
+        return blk
 
-    def getn(self, num: int) -> str:
-        """ ストリームからn要素を取り出す（無ければ空文字） """
+    def getn(self, num: int) -> Sequence[Any]:
+        """ ストリームからn要素を取り出す。無ければ空要素
+            （注意：getone() != getn(1) かもしれない？）
+        """
         if num <= 0:
             num = 1
-        ret = self.buf[self.pos: self.pos + num]
+        blk = self.buf[self.pos: self.pos + num]
         self.pos += num
         if self.pos > self.len:
             self.pos = self.len
-        return ret
+        return blk
 
-    def getall(self) -> str:
-        """ ストリームの残りの全ての要素を取り出す（無ければ空文字） """
+    def getall(self) -> Sequence[Any]:
+        """ ストリームの残りの全ての要素を取り出す。無ければ空要素
+        """
         all = self.buf[self.pos:]
         self.pos = self.len
         return all
 
-    def peekone(self) -> str:
-        """ ストリームの次の１要素を見る（無ければ空文字） """
-        if self.pos < self.len:
-            return self.buf[self.pos]
-        return ""
+    def peekone(self) -> Sequence[Any]:
+        """ ストリームの次の１要素を見る。無ければ空要素
+            （ポインタを進めない）
+        """
+        blk = self.buf[self.pos:self.pos+1]
+        if blk:
+            return blk[0]
+        return blk
 
-    def peekall(self) -> str:
-        """ ストリームの残りの全ての要素を見る（無ければ空要素） """
-        return self.buf[self.pos:]
+    def peekall(self) -> Sequence[Any]:
+        """ ストリームの残りの全ての要素を見る。無ければ空要素
+            （ポインタを進めない）
+        """
+        all = self.buf[self.pos:]
+        return all
 
 
 # -------------------------------------------------------------
@@ -218,10 +206,10 @@ def _wArgs(__args: List[str]) -> List[str]:
 
 # -------------------------------------------------------------
 # ファイル展開モジュール（ほとんど cl_parse専用）
-# 使い物になるか（コマンドラインで @xxxx を取得できるか）要検証★★★
 # -------------------------------------------------------------
 def file_expand(args: List[str]) -> List[str]:
-    """ リスト中の、”@<ファイル名>" の要素を展開する """
+    """ リスト中の、”@<ファイル名>" の要素を展開する
+    """
     ret: List[str] = []
     for item in args:
         if item.startswith("@"):
@@ -240,14 +228,15 @@ def file_expand(args: List[str]) -> List[str]:
 # Instant Closureクラス（まあ汎用）
 # ---------------------------------------------------------------------------
 class Mu:
-    """ Instant Closure クラス """
+    """ Instant Closure クラス
+    """
     def __init__(self, func: Callable[..., Any], *args: Any, **kwargs: Any):
-        """ 普通の関数(func)をクロージャーとして埋め込むクラス """
-
-        # 仕様は functools.partial() とほとんど同じ（多分）だけど、
-        # 埋め込んだ functionを呼び出すときの位置引数の順番が逆
-        # （呼び出し時の引数が先、埋め込んだ引数が後）
-
+        """ 普通の関数(func)をクロージャーとして埋め込むクラス
+        """
+        """ 仕様は functools.partial() とほとんど同じ（多分）だけど、
+            埋め込んだ functionを呼び出すときの位置引数の順番が逆
+            （呼び出し時の引数が先、埋め込んだ引数が後）
+        """
         self.args = args
         self.kwargs = kwargs
         self.func = func
@@ -260,9 +249,9 @@ class Mu:
 
 
 class Mu2:
-    """ Instant Closure ^2 クラス """
-    def __init__(self, func: Callable[..., Any],
-                 func2: Callable[..., Any], *args: Any, **kwargs: Any):
+    """ Instant Closure ^2 クラス
+    """
+    def __init__(self, func: Callable[..., Any], func2: Callable[..., Any], *args: Any, **kwargs: Any):
         """ functionと、そこから呼び出すfunctionを一緒に埋め込むクラス
             （仕様、使い方検討中）
         """
@@ -275,8 +264,7 @@ class Mu2:
         return self.func(self.func2, *args2, *self.args, **{**self.kwargs, **kwargs2})
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__} {repr(self.func)} {repr(self.func2)}\
-                 {repr(self.args)} {repr(self.kwargs)}'
+        return f'{self.__class__.__name__} {repr(self.func)} {repr(self.func2)} {repr(self.args)} {repr(self.kwargs)}'
 
 
 # -----------------------------------------------------
@@ -332,8 +320,8 @@ def cnv_enum(atype: EnumMeta, ename: str) -> Any:
 emsg = {
     "N00": "no error",
     "E01": "{eno}: FileNotFoundError at {arg}",
-    "E12": "{eno}: illegal argument for option {arg}",
-    "E11": "{eno}: missing argument for option {arg}",
+    "E11": "{eno}: illegal argument for option {arg}",
+    "E12": "{eno}: missing argument for option {arg}",
     "E13": "{eno}: unnecessary argument for option {arg}",
     "E14": "{eno}: illegal option {arg}",
     "E21": "{eno}: missing argument for option {opt} in {arg}",
@@ -359,9 +347,35 @@ class Smode(Enum):
 # -----------------------------------------------------
 # 定義されたオプションセット格納用クラス
 # -----------------------------------------------------
-class Opset:
-    def __init__(self, l_options: List[str], s_options: List[str],
-                 comment: str, acomment: str, atype: Any) -> None:
+# class Opset:
+#     def __init__(self, comment: str, acomment: str, atype: Any) -> None:
+#         """ オプションセット格納用クラス """
+#         self.__comment = comment        # コメント
+#         self.__atype = atype            # オプション引数のタイプ
+#         self.__acomment = acomment      # オプション引数のコメント
+
+#         self.isEnable: bool = False     # オプション有効/無効
+#         self.value: Any = None          # オプション引数
+
+#     @property
+#     def comment(self) -> str:
+#         return self.__comment
+
+#     @property
+#     def acomment(self) -> Any:
+#         return self.__acomment
+
+#     @property
+#     def atype(self) -> Any:
+#         return self.__atype
+
+
+# -----------------------------------------------------
+# cl改用★★★
+# 定義されたオプションセット格納用クラス
+# -----------------------------------------------------
+class Opset2:
+    def __init__(self, l_options: List[str], s_options: List[str], comment: str, acomment: str, atype: Any) -> None:
         """ オプションセット格納用クラス """
         self.__l_options = l_options
         self.__s_options = s_options
@@ -369,8 +383,8 @@ class Opset:
         self.__acomment = acomment      # オプション引数のコメント
         self.__atype = atype            # オプション引数のタイプ
 
-        self.__isEnable: bool = False   # オプション有効/無効
-        self.__value: Any = None        # オプション引数
+        self.isEnable: bool = False     # オプション有効/無効
+        self.value: Any = None          # オプション引数
 
     @property
     def l_options(self) -> List[str]:
@@ -392,20 +406,6 @@ class Opset:
     def atype(self) -> Any:
         return self.__atype
 
-    @property
-    def isEnable(self) -> bool:
-        return self.__isEnable
-
-    def _set_isEnable(self, isenable: bool):
-        self.__isEnable = isenable
-
-    @property
-    def value(self) -> bool:
-        return self.__value
-
-    def _set_value(self, value: bool):
-        self.__value = value
-
 
 # -----------------------------------------------------
 # パーサー本体
@@ -418,8 +418,8 @@ class Parse:
                  file_expand: bool = False,         # コマンド引数の @<filename> を展開するかどうか
                  comment_sp: str = '//',            # オプションコメントのセパレータ
                  debug: bool = False,               # デバッグ指定（--@ で結果一覧出力）
-                 option_name_prefix: str = "OPT_",  # 自プログラム内でオプションを指定する時のprefix
-                 option_string_prefix: str = "-",   # オプションの前に付ける - とか --
+                 option_name_prefix: str = "OPT_",
+                 option_string_prefix: str = "-",
                  ) -> None:
         """ コマンドラインパーサー """
 
@@ -432,20 +432,29 @@ class Parse:
         self.__option_name_prefix = option_name_prefix
         self.__option_string_prefix = option_string_prefix[0:1]
 
-        self.__debugmode: str = ""              # デバッグモードを格納
+        self.__debugmode = ""           # デバッグモードを格納
 
+        # ユーザー定義のオプションセット格納用 -------------------------
+        # self.ops: Dict[str, Opset] = {}         # 1文字オプション: オプションセット
+        # self.__stol: Dict[str, str] = {}        # 1文字オプション: ロング名オプション
+
+        # cl改★★★
         self.__options: List[str] = []          # 設定されたオプション属性リスト
         self.__ltoOPS: Dict[str, str] = {}
         self.__stoOPS: Dict[str, str] = {}
 
-        # オプション情報（Dict タイプ）
-        self.__D_option: Dict[str, Opset] = {}  # OPT_["option"] で取得する
-
         # オプションセット読み込み処理実行
         self.__set_options(options)
 
+        # ロング名オプション: 1文字オプション
+        # self.__ltos = {v: k for k, v in self.__stol.items()}
+        # self.__s_options = list(self.__stol.keys())     # 1文字オプション一覧
+        # self.__l_options = list(self.__ltos.keys())     # ロング名オプション一覧
+
         self.__s_options = list(self.__stoOPS.keys())     # 1文字オプション一覧
+        print(f'{self.__s_options=}')
         self.__l_options = list(self.__ltoOPS.keys())     # ロング名オプション一覧
+        print(f'{self.__l_options=}')
 
         # コマンドライン解析結果格納用 ---------------------------------
         self.__params: List[str] = []           # コマンド引数リスト
@@ -459,65 +468,48 @@ class Parse:
 
         # デバッグモード
         if self.__debugmode:
-            # print(f'debugmode for "{self.__debugmode}"')
-            __dmode = str(self.__debugmode)[1:]
-            print(__dmode)
-            # if self.__debugmode.startswith('$'):
-            if __dmode.startswith("##"):
-                if __dmode == "##":
-                    print("オプション設定一覧")
-                    self.show_definitionlist()
-                    exit()
-                elif __dmode == "##1":
-                    print("テンプレート１")
-                    self.__show_template(self.option_attrs)
-                    exit()
-                elif __dmode == "##2":
-                    print("テンプレート２")
-                    self.__show_template(self.__D_option)
-                    exit()
+            print(f"__debugmode [{self.__debugmode}]")
+            if self.__debugmode not in ["#", "#0", "#1", "#2"]:
+                print("入力引数一覧                 [#], [#1]")
+                print("オプション設定一覧           [#], [#0]")
+                print("オプション解析結果一覧       [#], [#1], [#2]")
+                print("コマンド引数一覧             [#], [#1], [#2]")
+                print("残りの入力引数一覧（あれば） [#], [#1], [#2]")
+                print("解析エラー情報               [#], [#1], [#2]")
 
-            elif __dmode.startswith("#"):
-                if __dmode in ["#", "#1"]:
-                    print("入力引数一覧")
-                    for i, arg in enumerate(self.__args):
-                        print(f"arg[{i}]: {arg}")
+            if self.__debugmode in ["#", "#1"]:
+                print("入力引数一覧")
+                for i, arg in enumerate(self.__args):
+                    print(f"arg[{i}]: {arg}")
+                print()
+            if self.__debugmode in ["#", "#0"]:
+                print("オプション設定一覧")
+                self.show_definitionlist()
+                print()
+            if self.__debugmode in ["#", "#1", "#2"]:
+                print("オプション解析結果一覧")
+                self.show_result()
+                print()
+            if self.__debugmode in ["#", "#1", "#2"]:
+                print("コマンド引数一覧")
+                for i, param in enumerate(self.params):
+                    print(f"arg[{i}]: {param}")
+                if self.remain:
                     print()
-                if __dmode in ["#", "#2"]:
-                    print("オプション解析結果一覧")
-                    self.show_result()
-                    print()
-                    print("コマンド引数一覧")
-                    for i, param in enumerate(self.params):
+                    print("残りの入力引数一覧")
+                    for i, param in enumerate(self.remain):
                         print(f"arg[{i}]: {param}")
-                    if self.remain:
-                        print()
-                        print("残りの入力引数一覧")
-                        for i, param in enumerate(self.remain):
-                            print(f"arg[{i}]: {param}")
-                    print()
-                    if self.is_error:
-                        print("解析エラーあり")
-                        print(self.get_errormessage(2))
-                    else:
-                        print("解析エラーなし")
-                    print()
-                if __dmode in ["#", "#1", "#2"]:
-                    input('Hit any key for start program:')
-                    print("-------- START PROGRAM --------")
-                    return
+                print()
+            if self.__debugmode in ["#", "#1", "#2"]:
+                if self.is_error:
+                    print("解析エラーあり")
+                    print(self.get_errormessage(2))
+                else:
+                    print("解析エラーなし")
+                print()
 
-            print('debugmode for "---##" の指定方法')
-            print('---##  :オプション設定一覧を表示して終了')
-            print('---##1 :テンプレート（OPT_xxxx）を表示して終了')
-            print('---##2 :テンプレート（OPT_["xxxx"]）を表示して終了')
-            print()
-            print('debugmode for "---#" の指定方法')
-            print('---#  :入力引数一覧、解析結果を表示して続行')
-            print('---#1 :入力引数一覧を表示して続行')
-            print('---#2 :解析結果を表示して続行')
-            print()
-            exit()
+            input('Hit any key for start program:')
+            print("-------- START PROGRAM --------")
 
     # -----------------------------------------------------
     # オプションセット読み込み処理
@@ -528,12 +520,17 @@ class Parse:
         for iopset in options:
             iopset = (iopset + [None] * (4 - len(iopset)))[0:4]
 
+            # self.__option_name_prefix = "OPT_"
+            # opt_prefix = ""
+            # self.__option_string_prefix = '-'
+
             import keyword
 
             # オプション名の処理 --------------------------------
             opt_name = iopset[0]
             if not opt_name.startswith(self.__option_name_prefix):     # 頭に prefixが付いてなかったら
                 opt_name = self.__option_name_prefix + opt_name            # 頭に prefixを付加
+            print(opt_name)
 
             # Python変数としての文字種チェック
             assert opt_name.isidentifier() and (not keyword.iskeyword(opt_name)),\
@@ -545,7 +542,9 @@ class Parse:
             # オプション文字列の処理 ----------------------------
             s_options: List[str] = []
             l_options: List[str] = []
+            # option_strings = iopset[1]
             option_strings = list(map(lambda x: x.strip(), iopset[1].split(',')))
+            print(option_strings)
             for s in option_strings:
                 count = count_prefix(s, self.__option_string_prefix, max_count=2)
                 if count == 1:
@@ -555,6 +554,9 @@ class Parse:
                 else:
                     assert True, \
                         f'illegal option string [{s}]'
+
+            print(s_options)
+            print(l_options)
 
             # iopset[0] : 1文字オプション、iopset[1] : ロング名オプション
             assert isinstance(iopset[1], str) and isinstance(iopset[2], str), \
@@ -567,18 +569,29 @@ class Parse:
             ioacomment = "" if ioacomment is None else ioacomment
 
             # iopset[3] : オプション引数のタイプ（存在しなければ None）
+            # ioatype = iopset[3] if len(iopset) > 3 else None
             ioatype = iopset[3]
             assert ioatype is None or callable(ioatype), \
                 f'illegal type of "option-argument type" {iopset}'
 
+            # オプションセット格納（1文字オプション: オプションセット）
+            # assert iopset[0] not in self.ops.keys(), \
+            #     f'double definition of option [{iopset[0]}]'
+            # self.ops[iopset[0]] = Opset(icomment, ioacomment, ioatype)
+            # assert iopset[1] not in self.__stol.values(), \
+            #     f'double definition of option [{iopset[1]}]'
+            # self.__stol[iopset[0]] = iopset[1]  # 1文字オプション: ロング名オプションに追加
+
             # cl改用★★★
-            setattr(self, opt_name, Opset(l_options, s_options, icomment, ioacomment, ioatype))
-            self.__D_option[iopset[0]] = getattr(self, opt_name)     # オプション情報 Dictバージョン
+            # opt_name = "OPT_" + iopset[0]
+            setattr(self, opt_name, Opset2(l_options, s_options, icomment, ioacomment, ioatype))
             self.__options.append(opt_name)
             for s in l_options:
                 self.__ltoOPS[s] = opt_name
             for s in s_options:
                 self.__stoOPS[s] = opt_name
+
+            # self.__ops = None
 
     # -----------------------------------------------------
     # コマンドライン解析の本文
@@ -591,8 +604,9 @@ class Parse:
         if self.__debug:        # デバッグモード指定を取得
             wargs: List[str] = []
             for item in self.__args:
-                if item.startswith("---"):
-                    self.__debugmode = "*" + item[3:]
+                if item.startswith("@@#"):
+                    # if item in ["#", "#0", "#1", "#2"]:
+                    self.__debugmode = item[2:]
                 else:
                     wargs += [item]
             self.__args = wargs
@@ -601,6 +615,7 @@ class Parse:
             try:
                 self.__args = file_expand(self.__args)
             except Exception as e:
+                # print(e)
                 self.__set_error_reason('E01', str(e))
                 return
 
@@ -608,23 +623,21 @@ class Parse:
             self.__args = _wArgs(self.__args)
 
         # 解析本文
-        b_args = iter(self.__args)      # コマンドライン（文字列のリスト）をイテレータに
-        for arg in b_args:
-            jst = C_Stream(arg)
+        b_args = F_Stream(self.__args)
+        for arg in b_args.stream():
+            jst = F_Stream(arg)
             if arg.startswith("-"):
                 if arg.startswith("--"):    # ロング名オプションブロック（頭が「--」） ----------------
                     jst.getn(2)
-                    if jst.peekone() == "":     # 「--」のみのブロック
+                    if jst.peekone() is None:   # 「--」のみのブロック
 
                         if t.checkTurn(Turn.ARG):   # ターンチェック（コマンド引数）
                             if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.ARG)) or \
                                (self.__smode == Smode.ARGFIRST and t.getTimes(Turn.OPT)):
                                 break
-                        wparam = next(b_args, None)     # 次のブロックを取得
-                        if wparam is None:              # 次のブロックが無ければ終了
-                            break
-                        self.__params.append(str(wparam))   # 次のブロックは無条件に「コマンド引数」
-                        continue
+                        if wparam := b_args.getone():
+                            self.__params.append(str(wparam))   # 次のブロックは無条件に「コマンド引数」
+                            continue
 
                     if t.checkTurn(Turn.OPT):   # ターンチェック（オプション）
                         if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.OPT)) or \
@@ -635,22 +648,26 @@ class Parse:
                     opt = self.__complete_l_option(opt)
                     if opt:     # 正しいロング名オプション ----------
                         __ops = getattr(self, self.__ltoOPS[opt])
-                        __ops._set_isEnable(True)
+                        __ops.isEnable = True
 
+                        # opt = self.s_option(opt)
+                        # self.ops[opt].isEnable = True
+                        # if self.atype(opt):     # オプション引数が必要 ---------
                         if __ops.atype:     # オプション引数が必要 ---------
-                            harg = arg  # for 'E12' error_reason
-                            if oarg is None:                    # オプション引数無し（= 以降が無い）
-                                oarg = next(b_args, None)           # 次のブロックをオプション引数として取得
-                                if oarg is None:                    # それも無ければエラー
-                                    self.__set_error_reason('E11', arg=arg)
+                            harg = arg  # for 'E11' error_reason
+                            if oarg is None:                   # オプション引数無し（= 以降が無い）
+                                oarg = b_args.getone()     # 次のブロックをオプション引数として取得
+                                harg = harg + " " + oarg  # for 'E11' error_reason
+                                if not oarg:               # それも無ければエラー
+                                    self.__set_error_reason('E12', arg=arg)
                                     return
-                                harg = harg + " " + oarg  # for 'E12' error_reason
-                            ret = self.__set_value(__ops, oarg)    # オプション引数を格納
+                            # ret = self.__set_value(opt, oarg)   # オプション引数を格納
+                            ret = self.__set_value2(__ops, oarg)   # オプション引数を格納
                             if not ret:     # オプション引数格納（変換）エラー
-                                self.__set_error_reason('E12', arg=harg)
+                                self.__set_error_reason('E11', arg=harg)
                                 return
                         else:                   # オプション引数が不要 ---------
-                            if oarg is not None:                     # オプション引数が不要なのに引数あり
+                            if oarg:                     # オプション引数が不要なのに引数あり
                                 self.__set_error_reason('E13', arg=arg)
                                 return
                     else:       # ロング名オプションが正しくない ----
@@ -663,21 +680,25 @@ class Parse:
                            (self.__smode == Smode.OPTFIRST and t.getTimes(Turn.ARG)):
                             break
                     jst.getone()
+                    # jst.getch()
                     for opt in jst.stream():
                         if opt in self.__s_options:   # 正しい1文字オプション -----------
                             __ops = getattr(self, self.__stoOPS[opt])
-                            __ops._set_isEnable(True)
+                            __ops.isEnable = True
 
+                            # self.ops[opt].isEnable = True
+                            # if self.atype(opt):             # オプション引数が必要か
                             if __ops.atype:             # オプション引数が必要か
                                 oparg = jst.getall()    # 後続文字列からオプション引数を取得
                                 harg = arg  # for 'E22' error_reason
                                 if not oparg:           # 無ければ、
-                                    oparg = next(b_args, None)  # 次のブロックを取得
+                                    oparg = str(b_args.getone())     # 次のブロックを取得
+                                    harg = harg + " " + oparg   # for 'E22' error_reason
                                     if not oparg:               # それも無ければエラー
                                         self.__set_error_reason('E21', opt=opt, arg=arg)
                                         return
-                                    harg = harg + " " + oparg   # for 'E22' error_reason
-                                ret = self.__set_value(__ops, oparg)  # オプション引数を格納
+                                # ret = self.__set_value(opt, oparg)  # オプション引数を格納
+                                ret = self.__set_value2(__ops, oparg)  # オプション引数を格納
                                 if not ret:     # オプション引数格納（変換）エラー
                                     self.__set_error_reason('E22', opt=opt, arg=harg)
                                     return
@@ -696,25 +717,53 @@ class Parse:
             return
 
         # 途中終了
-        self.__remain = [arg] + [_arg for _arg in b_args]       # 残りのコマンドラインを格納
+        self.__remain = [arg] + list(b_args.getall())       # 残りのコマンドラインを格納
         self.__error = False
         return
 
-    def __set_value(self, __ops: Opset, optarg: Any) -> bool:
+    # -----------------------------------------------------
+    # 内部処理
+    # -----------------------------------------------------
+    # def __set_value(self, option: str, optarg: Any) -> bool:
+    #     """ このオプションのオプション引数を格納する。エラー時には Falseを返す
+    #     """
+    #     atype = self.atype(option)
+    #     try:
+    #         # 「str」の時はそのまま格納
+    #         if atype is str:
+    #             self.ops[self.s_option(option)].value = optarg
+
+    #         # Enum、Flag類
+    #         elif isinstance(atype, EnumMeta):
+    #             self.ops[self.s_option(option)].value = cnv_enum(atype, optarg)
+
+    #         # 直接変換呼び出しできるもの
+    #         else:
+    #             self.ops[self.s_option(option)].value = atype(optarg)
+
+    #         return True
+
+    #     except ValueError as e:     # 変換エラー
+    #         self.__additional_emsg = str(e)
+    #         return False
+
+    # @staticmethod
+    def __set_value2(self, __ops: 'Parse', optarg: Any) -> bool:
         """ このオプションのオプション引数を格納する。エラー時には Falseを返す
         """
+        atype = __ops.atype
         try:
             # 「str」の時はそのまま格納
-            if __ops.atype is str:
-                __ops._set_value(optarg)
+            if atype is str:
+                __ops.value = optarg
 
             # Enum、Flag類
-            elif isinstance(__ops.atype, EnumMeta):
-                __ops._set_value(cnv_enum(__ops.atype, optarg))
+            elif isinstance(atype, EnumMeta):
+                __ops.value = cnv_enum(atype, optarg)
 
             # 直接変換呼び出しできるもの
             else:
-                __ops._set_value(__ops.atype(optarg))
+                __ops.value = atype(optarg)
 
             return True
 
@@ -738,7 +787,8 @@ class Parse:
 
     def __set_error_reason(self, eno: str, arg: str = "???", opt: str = "???",
                            ext0: str = "ext0", ext1: str = "ext1") -> None:
-        """ 解析エラーの理由をセットする """
+        """ 解析エラーの理由をセットする
+        """
         self.__error_reason = {
             "eno": eno, "arg": arg, "opt": opt, "ext0": ext0, "ext1": ext1
         }
@@ -746,15 +796,69 @@ class Parse:
     @staticmethod
     def __error_message(eno: str, arg: str = "???", opt: str = "???",
                         ext0: str = "ext0", ext1: str = "ext1") -> str:
-        """ 解析エラーメッセージを作成する """
+        """ 解析エラーメッセージを作成する
+        """
         if eno in emsg.keys():
             return emsg[eno].format(eno=eno, arg=arg, opt=opt, ext0=ext0, ext1=ext1)
         return emsg["E99"].format(eno=eno, arg=arg, opt=opt, ext0=ext0, ext1=ext1)
 
-    @property
-    def OPT_(self) -> Dict[str, Opset]:
-        """ オプション情報（Dict タイプ）を返す """
-        return self.__D_option
+    # -----------------------------------------------------
+    # ユーザ提供メソッド
+    # -----------------------------------------------------
+    # def s_option(self, option: str) -> str:
+    #     """ オプション -> 1文字オプションに変換する
+    #     """
+    #     if option in self.l_options:            # 引数のoptionがロング名オプションだったら、
+    #         return self.__ltos[option]          # 1文字オプションを返す
+    #     elif option in self.s_options:          # 1文字オプションだったら、
+    #         return option                       # そのまま返す
+    #     assert False, f'illegal option [{option}]'
+    #     return ""
+
+    # def l_option(self, option: str) -> str:
+    #     """ オプション -> ロング名オプションに変換する
+    #     """
+    #     if option in self.s_options:            # 引数のoptionが１文字オプションだったら、
+    #         return self.__stol[option]          # ロング名オプションを返す
+    #     elif option in self.l_options:          # 引数のoptionがロング名オプションだったら、
+    #         return option                       # そのまま返す
+    #     assert False, f'illegal option [{option}]'
+    #     return ""
+
+    # @property
+    # def l_options(self) -> List[str]:
+    #     """ ロング名オプションの一覧 """
+    #     return self.__l_options
+
+    # @property
+    # def s_options(self) -> List[str]:
+    #     """ 一文字オプションの一覧 """
+    #     return self.__s_options
+
+    # @property
+    # def options(self) -> List[str]:
+    #     """ すべてのオプションの一覧 """
+    #     return self.l_options + self.s_options
+
+    # def isEnable(self, option: str) -> bool:
+    #     """ このオプションが有効かどうか（指定されたかどうか）を返す """
+    #     return self.ops[self.s_option(option)].isEnable
+
+    # def comment(self, option: str) -> str:
+    #     """ このオプションのコメントを返す """
+    #     return self.ops[self.s_option(option)].comment
+
+    # def atype(self, option: str) -> Any:
+    #     """ このオプションのオプション引数タイプを返す """
+    #     return self.ops[self.s_option(option)].atype
+
+    # def value(self, option: str) -> Any:
+    #     """ このオプションのオプション引数を返す """
+    #     return self.ops[self.s_option(option)].value
+
+    # def acomment(self, option: str) -> str:
+    #     """ このオプションのオプション引数のコメントを返す """
+    #     return self.ops[self.s_option(option)].acomment
 
     @property
     def params(self) -> List[str]:
@@ -783,11 +887,46 @@ class Parse:
     # cl改用★★★
     @property
     def option_attrs(self) -> List[str]:
-        """ オプション属性リストを取得する """
         return self.__options
 
+    # -----------------------------------------------------
+    # ユーティリティ関数
+    # -----------------------------------------------------
+    # def show_optionlist(self, tab0: int = 16, tabn: int = 8, file: TextIO = sys.stdout) -> None:
+    #     """ オプション設定一覧を表示する
+    #     """
+    #     # for opt in self.s_options:
+    #     for opt in self.option_attrs:
+    #         op = getattr(self, opt)
+    #         soption = ""
+    #         loption = ""
+    #         for s in op.s_options:
+    #             soption += self.__option_string_prefix + s + ', '
+    #         for s in op.l_options:
+    #             loption += self.__option_string_prefix * 2 + s + ', '
+
+
+    #     #     soption = f"-{opt}, " if len(opt) < 2 else ""
+    #     #     loption = "--" + self.l_option(opt)
+    #         option = (soption + loption).rstrip(', ')
+    #         if op.atype:
+    #             option += " " + op.acomment
+    #         print(Wstr(option).tjust(tab0, tabn) + f": {op.comment}", file=file)
+
+    #     # print()
+    #     # for opt in self.option_attrs:
+    #     #     op = getattr(self, opt)
+    #     #     print(opt)
+    #     #     print(f'    s_options = {op.s_options}')
+    #     #     print(f'    l_options = {op.l_options}')
+    #     #     print(f'    comment = [{op.comment}], acomment = [{op.acomment}]')
+    #     #     print(f'    atype = {op.atype}')
+
+
     def get_optionlist(self) -> List[List[str]]:
-        """ オプション設定一覧を取得する """
+        """ オプション設定一覧を取得する
+        """
+        # for opt in self.s_options:
         optionlist: List[List[str]] = []
 
         for opt in self.option_attrs:
@@ -807,7 +946,18 @@ class Parse:
         return optionlist
 
     def show_definitionlist(self) -> None:
-        """ オプション設定一覧を表示する（デバッグ／ユーティリティ用） """
+        """ オプション設定一覧を表示する
+        """
+        # for opt in self.s_options:
+
+        #     soption = f"-{opt}, " if len(opt) < 2 else ""
+        #     loption = "--" + self.l_option(opt)
+        #     if self.atype(opt):
+        #         loption += " " + self.acomment(opt)
+        #     option = soption + loption
+        #     print(Wstr(option).tjust(tab0, tabn) + f": {self.comment(opt)}", file=file)
+
+        # print()
         for opt in self.option_attrs:
             op = getattr(self, opt)
             print(opt)
@@ -816,47 +966,29 @@ class Parse:
             print(f'    comment = [{op.comment}], acomment = [{op.acomment}]')
             print(f'    atype = {op.atype}')
 
-    def __show_template(self, options: Union[List[str], Dict[str, Opset]]):
-        """ テンプレートを表示する（デバッグ／ユーティリティ用） """
-
-        def __show_one(stropt: str, objopt: Any):
-            print((f'if op.{stropt}.isEnable:').ljust(30), f"# {objopt.comment}")
-            if objopt.atype:
-                print(f'    value = op.{stropt}.value')
-            elif "help" in objopt.l_options:
-                print('    print("使用方法を書く")')
-                print('    # op.get_optionlist() 等を表示する')
-                print('    exit()')
-            else:
-                print('    pass')
-
-        print('# please replace "op" to appropriate instance name.')
-        print('if op.is_error:')
-        print('    # op.get_errormessage() 等を表示する')
-        print('    exit(1)')
-        if type(options) is list:
-            for opt in options:
-                op = getattr(self, opt)
-                __show_one(opt, op)
-        elif type(options) is dict:
-            for opt in options.keys():
-                __show_one(f'OPT_["{opt}"]', self.OPT_[opt])
-
     def show_result(self) -> None:
-        """ オプション解析結果一覧を表示する（デバッグ用） """
+        """ オプション解析結果一覧を表示する（デバッグ用）
+        """
+        # for opt in self.s_options:
+        #     strvalue = str(self.value(opt))
+        #     if type(self.value(opt)) is str:
+        #         strvalue = "'"+strvalue+"'"     # 文字列(str)なら''で囲って表示する
+        #     print(f"-{opt}, --{self.l_option(opt)}".ljust(14),
+        #           f"=> {str(self.isEnable(opt)).ljust(5)}  {strvalue}")
+
+        # print()
         for opt in self.option_attrs:
             op = getattr(self, opt)
-            strvalue = ""
-            if op.atype:
-                strvalue = str(op.value)
-                if type(op.value) is str:
-                    strvalue = "'"+strvalue+"'"     # 文字列(str)なら''で囲って表示する
+            strvalue = str(op.value)
+            if type(op.value) is str:
+                strvalue = "'"+strvalue+"'"     # 文字列(str)なら''で囲って表示する
             print(opt.ljust(12),
                   f"=> {str(op.isEnable).ljust(5)}  {strvalue}")
 
     @staticmethod
     def show_errormessage() -> None:
-        """ 解析エラーメッセージ一覧を表示する（デバッグ用） """
+        """ 解析エラーメッセージ一覧を表示する（デバッグ用）
+        """
         for eno in emsg:
             print(Parse.__error_message(eno,
                         arg="<ARG>", opt="<OPT>", ext0="<EXT0>", ext1="<EXT1>"))
@@ -865,6 +997,7 @@ class Parse:
 # -------------------------------------------------------------------------------------
 if __name__ == '__main__':
     import sys
+    import tprint
 
     class Color(IntFlag):
         RED = auto()
@@ -873,12 +1006,8 @@ if __name__ == '__main__':
         PURPLE = RED | GREEN
         WHITE = RED | GREEN | BLUE
 
-    args = sys.argv
-    if len(args) <= 1:
-        args = 'this.py -al BLUE|RED|GREEN ABC --display 1024x0X40 --exp -ar ---# 0.5 --ext 0x4a4f'.split()
-        # args = 'this.py -al BLUE|RED|GREEN ABC --display 1024x0X40 --exp -ar 0.5 --ext 0x4a4f'.split()
-        # args = 'this.py -al ---#'.split()
-        pass
+    args = 'this.py -hal BLUE|RED|GREEN ABC --display 1024x0X40 --exp -ar @@# 0.5 --ext 0x4a4f'.split()
+    # args = sys.argv
 
     # cl_parse 呼び出し用のオプション定義
     options = [
@@ -895,41 +1024,32 @@ if __name__ == '__main__':
     # cl_parse 呼び出し（解析実行）
     op = Parse(options, args, debug=True)
 
+    print(op.option_attrs)
+
     # 解析エラー時の処理は自前で行う
     if op.is_error:
         print(op.get_errormessage(1), file=sys.stderr)
         print("オプション一覧", file=sys.stderr)
         # op.show_optionlist(tab0=24, file=sys.stderr)
-        tabprint(op.get_optionlist(), [22, 4], file=sys.stderr)
+        tprint.tprint(op.get_optionlist(), [22, 4], tabscale=True, file=sys.stderr)
         exit(1)
 
     # help情報の表示も自前
     if op.OPT_help.isEnable:
         print("使い方を表示する。")
         # op.show_optionlist(tab0=24)
-        tabprint(op.get_optionlist(), [22, 4])
+        tprint.tprint(op.get_optionlist(), [22, 4], tabscale=True)
         exit()
 
     # ここから自分のプログラム
     # if op.isEnable("all"):
     #     print("-a, --all : すべて出力、が指定されました。")
 
-    if op.OPT_["color"].isEnable:
-        print('OPT_["color"] is Enable,', f'value = {op.OPT_["color"].value}')
-
     if op.OPT_all.isEnable:
-        print("-a, --all : すべて出力、が指定されましたよ。")
-
-    if op.OPT_["all"].isEnable:
         print("-a, --all : すべて出力、が指定されましたよ。")
 
     if op.OPT_color.isEnable:
         print(f"-c, --color : 表示色、が指定されましたよ。color={repr(op.OPT_color.value)}")
-        print(f'{op.OPT_color.value=}')
-        # print(f"-c, --color : 表示色、が指定されましたよ。color={repr(op.option['OPT_color'].value)}")
-
-    if op.OPT_['color'].isEnable:
-        print(f"-c, --color : 表示色、が指定されましたよ。color={repr(op.OPT_['color'].value)}")
 
     # if op.OPT_size.isEnable:
     #     print(f"-s, --size : 表示サイズ、が指定されましたよ。size={repr(op.OPT_size.value)}")
@@ -937,14 +1057,8 @@ if __name__ == '__main__':
     if op.OPT_size.isEnable:     # type: ignore
         print(f"-s, --size : 表示サイズ、が指定されましたよ。size={repr(op.OPT_size.value)}")     # type: ignore
 
-    if op.OPT_["OPT_size"].isEnable:     # type: ignore
-        print(f"-s, --size : 表示サイズ、が指定されましたよ。size={repr(op.OPT_['OPT_size'].value)}")     # type: ignore
-
     if op.OPT_ratio.isEnable:
         print(f"-r, --ratio : 比率を指定する、が指定されましたよ。ratio={repr(op.OPT_ratio.value)}")
-
-    if op.OPT_["OPT_ratio"].isEnable:
-        print(f"-r, --ratio : 比率を指定する、が指定されましたよ。ratio={repr(op.OPT_['OPT_ratio'].value)}")
 
     if op.OPT_extend.isEnable:
         print("-x, --extend : 特別な奴、が指定されましたよ。")

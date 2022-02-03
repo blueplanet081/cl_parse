@@ -1,14 +1,15 @@
 import sys
 from enum import Flag, auto
 
-from lib import cl_parse_old as cl
+from lib import cl_parse as cl
 
 # import functools
 
 
-# 試験用コマンドライン
-args = 'this.py # -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --date 2021/10/3'.split()
-# args = sys.argv
+args = sys.argv
+if len(args) <= 1:
+    # 試験用コマンドライン
+    args = 'this.py # -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --date 2021/10/3'.split()
 
 
 class Color(Flag):
@@ -32,54 +33,82 @@ class Color(Flag):
 
 # cl_parse 呼び出し用のオプション定義
 options = [
-        ["h", "help", "使い方を表示する", None],
-        ["a", "all", "すべて出力"],
-        ["d", "date", "対象日//<年/月/日>", cl.date],
-        ["c", "color", "表示色//<color>", Color],
-        ["s", "size", "表示サイズを指定する//<縦x横>",
+        ["help", "-h, --help", "使い方を表示する", None],
+        ["all", "-a, --all", "すべて出力"],
+        ["date", "-d --date", "対象日//<年/月/日>", cl.date],
+        ["color", "-c, --color", "表示色//<color>", Color],
+        ["size", "-s, --size", "表示サイズを指定する//<縦x横>",
             cl.sepalate_items(type=cl.int_literal, sep='x', count=0)],
-        ["r", "ratio", "比率を指定する//<比率>", float],
-        ["x", "extend", "特別な奴"],
-        ["e", "expect", "紛らわしい奴"],
+        ["ratio", "-r, --ratio", "比率を指定する//<比率>", float],
+        ["xtend", "-x, --extend", "特別な奴"],
+        ["expect", "-x, --expect", "紛らわしい奴"],
 ]
 
 # cl_parse 呼び出し（解析実行）
 op = cl.Parse(options, args, debug=True)
 
 # 解析エラー時の処理は自前で行う
+# if op.is_error:
+#     print(op.get_errormessage(2), file=sys.stderr)
+#     print("オプション一覧")
+#     op.show_optionslist()
+#     exit(1)
+
+# # help情報の表示も自前
+# if op.isEnable("help"):
+#     print("使い方を表示する。")
+#     op.show_optionslist()
+#     exit()
+
+# please replace "op" to appropriate instance name.
 if op.is_error:
+    # op.get_errormessage() 等を表示する
     print(op.get_errormessage(2), file=sys.stderr)
-    print("オプション一覧")
-    op.show_optionslist()
     exit(1)
 
-# help情報の表示も自前
-if op.isEnable("help"):
-    print("使い方を表示する。")
-    op.show_optionslist()
+if op.OPT_["help"].isEnable:   # 使い方を表示する
+    print("使用方法を書く")
+    # op.get_optionlist() 等を表示する
+    cl.tabprint(op.get_optionlist())
     exit()
 
-# ここから自分のプログラム
-if op.isEnable("all"):
-    print("-a, --all : すべて出力、が指定されました。")
+if op.OPT_["all"].isEnable:    # すべて出力
+    pass
+if op.OPT_["date"].isEnable:   # 対象日
+    value = op.OPT_["date"].value
+if op.OPT_["color"].isEnable:  # 表示色
+    value = op.OPT_["color"].value
+if op.OPT_["size"].isEnable:   # 表示サイズを指定する
+    value = op.OPT_["size"].value
+if op.OPT_["ratio"].isEnable:  # 比率を指定する
+    value = op.OPT_["ratio"].value
+if op.OPT_["xtend"].isEnable:  # 特別な奴
+    pass
+if op.OPT_["expect"].isEnable: # 紛らわしい奴
+    pass
 
-if op.isEnable("color"):
-    print(f"-c, --color : 表示色、が指定されました。color={op.value('color')}")
 
-if op.isEnable("date"):
-    print(f"-d, --date : 対象日、が指定されました。date={op.value('date')}")
+# # ここから自分のプログラム
+# if op.isEnable("all"):
+#     print("-a, --all : すべて出力、が指定されました。")
 
-if op.isEnable("size"):
-    print(f"-s, --size : 表示サイズ、が指定されました。size={op.value('size')}")
+# if op.isEnable("color"):
+#     print(f"-c, --color : 表示色、が指定されました。color={op.value('color')}")
 
-if op.isEnable("ratio"):
-    print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={op.value('ratio')}")
+# if op.isEnable("date"):
+#     print(f"-d, --date : 対象日、が指定されました。date={op.value('date')}")
 
-if op.isEnable("extend"):
-    print("-x, --extend : 特別な奴、が指定されました。")
+# if op.isEnable("size"):
+#     print(f"-s, --size : 表示サイズ、が指定されました。size={op.value('size')}")
 
-if op.isEnable("expect"):
-    print("-e, --expect : 紛らわしい奴、が指定されました。")
+# if op.isEnable("ratio"):
+#     print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={op.value('ratio')}")
+
+# if op.isEnable("extend"):
+#     print("-x, --extend : 特別な奴、が指定されました。")
+
+# if op.isEnable("expect"):
+#     print("-e, --expect : 紛らわしい奴、が指定されました。")
 
 # options = [
 #         ["h", "help", "使い方を表示する", None],
