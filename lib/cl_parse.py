@@ -142,7 +142,7 @@ class C_Stream():
         return ""
 
     def peekall(self) -> str:
-        """ ストリームの残りの全ての要素を見る（無ければ空要素） """
+        """ ストリームの残りの全ての要素を見る（無ければ空文字） """
         return self.buf[self.pos:]
 
 
@@ -275,8 +275,8 @@ class Mu2:
         return self.func(self.func2, *args2, *self.args, **{**self.kwargs, **kwargs2})
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__} {repr(self.func)} {repr(self.func2)}\
-                 {repr(self.args)} {repr(self.kwargs)}'
+        return f'{self.__class__.__name__} {repr(self.func)} {repr(self.func2)} ' + \
+               f'{repr(self.args)} {repr(self.kwargs)}'
 
 
 # -----------------------------------------------------
@@ -290,7 +290,8 @@ def sepalate_items__(
     """
     motos = moto.split(sep)
     if count != 0 and len(motos) != count:
-        raise ValueError(f"sepalate items count error. required {count} / detected {len(motos)} at arg=[{moto}]")
+        raise ValueError(f"sepalate items count error. required {count} "
+                         f"/ detected {len(motos)} at arg=[{moto}]")
     if type:
         motos = list(map(type, motos))
     return motos
@@ -332,8 +333,8 @@ def cnv_enum(atype: EnumMeta, ename: str) -> Any:
 emsg = {
     "N00": "no error",
     "E01": "{eno}: FileNotFoundError at {arg}",
-    "E12": "{eno}: illegal argument for option {arg}",
     "E11": "{eno}: missing argument for option {arg}",
+    "E12": "{eno}: illegal argument for option {arg}",
     "E13": "{eno}: unnecessary argument for option {arg}",
     "E14": "{eno}: illegal option {arg}",
     "E21": "{eno}: missing argument for option {opt} in {arg}",
@@ -459,10 +460,7 @@ class Parse:
 
         # デバッグモード
         if self.__debugmode:
-            # print(f'debugmode for "{self.__debugmode}"')
             __dmode = str(self.__debugmode)[1:]
-            print(__dmode)
-            # if self.__debugmode.startswith('$'):
             if __dmode.startswith("##"):
                 if __dmode == "##":
                     print("オプション設定一覧")
@@ -523,8 +521,7 @@ class Parse:
     # オプションセット読み込み処理
     # -----------------------------------------------------
     def __set_options(self, options: List[List[Any]]) -> None:
-        """ オプションセットを読み込む
-        """
+        """ オプションセットを読み込む """
         for iopset in options:
             iopset = (iopset + [None] * (4 - len(iopset)))[0:4]
 
@@ -537,24 +534,24 @@ class Parse:
 
             # Python変数としての文字種チェック
             assert opt_name.isidentifier() and (not keyword.iskeyword(opt_name)),\
-                f'illegal option name [{opt_name}]'
+                f'illegal option name [{opt_name}] in {iopset}'
             # 重複チェック
             assert opt_name not in self.__options,\
-                f'duplicated option name [{opt_name}]'
+                f'duplicated option name [{opt_name}] in {iopset}'
 
             # オプション文字列の処理 ----------------------------
             s_options: List[str] = []
             l_options: List[str] = []
             option_strings = list(map(lambda x: x.strip(), iopset[1].split(',')))
             for s in option_strings:
-                count = count_prefix(s, self.__option_string_prefix, max_count=2)
+                count = count_prefix(s, self.__option_string_prefix, max_count=0)
                 if count == 1:
                     s_options.append(s[1:])
-                elif count >= 2:
+                elif count == 2:
                     l_options.append(s[2:])
                 else:
-                    assert True, \
-                        f'illegal option string [{s}]'
+                    assert False, \
+                        f'illegal option string [{s}] in {iopset}'
 
             # iopset[0] : 1文字オプション、iopset[1] : ロング名オプション
             assert isinstance(iopset[1], str) and isinstance(iopset[2], str), \
@@ -576,16 +573,17 @@ class Parse:
             self.__D_option[iopset[0]] = getattr(self, opt_name)     # オプション情報 Dictバージョン
             self.__options.append(opt_name)
             for s in l_options:
+                assert s not in self.__ltoOPS.keys(), f'duplicated option string --{s} in {iopset}'
                 self.__ltoOPS[s] = opt_name
             for s in s_options:
+                assert s not in self.__stoOPS.keys(), f'duplicated option string -{s} in {iopset}'
                 self.__stoOPS[s] = opt_name
 
     # -----------------------------------------------------
     # コマンドライン解析の本文
     # -----------------------------------------------------
     def __parse(self) -> None:
-        """ コマンドラインを解析する
-        """
+        """ コマンドラインを解析する """
         t = CheckTurn()         # ターンチェック用
 
         if self.__debug:        # デバッグモード指定を取得
@@ -640,7 +638,7 @@ class Parse:
                         if __ops.atype:     # オプション引数が必要 ---------
                             harg = arg  # for 'E12' error_reason
                             if oarg is None:                    # オプション引数無し（= 以降が無い）
-                                oarg = next(b_args, None)           # 次のブロックをオプション引数として取得
+                                oarg = next(b_args, None)           # 次のブロックを引数として取得
                                 if oarg is None:                    # それも無ければエラー
                                     self.__set_error_reason('E11', arg=arg)
                                     return
@@ -701,8 +699,7 @@ class Parse:
         return
 
     def __set_value(self, __ops: Opset, optarg: Any) -> bool:
-        """ このオプションのオプション引数を格納する。エラー時には Falseを返す
-        """
+        """ このオプションのオプション引数を格納する。エラー時には Falseを返す """
         try:
             # 「str」の時はそのまま格納
             if __ops.atype is str:
@@ -882,11 +879,11 @@ if __name__ == '__main__':
 
     # cl_parse 呼び出し用のオプション定義
     options = [
-            ["help", "-h, -q , --sdf, --help","使い方を表示する", None],
+            ["help", "-h, -q , --sdf, --help", "使い方を表示する", None],
             ["all", "-a, --all", "すべて出力"],
             ["color", "-c, --color, -l", "表示色//<color>", Color],
             ["OPT_size", " --size, --display", "表示サイズを指定する//<縦x横>",
-                sepalate_items(type=int_literal, sep='x', count=0)],
+                sepalate_items(type=int_literal, sep='x', count=2)],
             ["OPT_ratio", "-r,--ratio", "比率を指定する//<比率>", float],
             ["extend", "-x, --extend ", "特別な奴"],
             ["expect", "-e, --expect", "紛らわしい奴"],
@@ -899,55 +896,34 @@ if __name__ == '__main__':
     if op.is_error:
         print(op.get_errormessage(1), file=sys.stderr)
         print("オプション一覧", file=sys.stderr)
-        # op.show_optionlist(tab0=24, file=sys.stderr)
         tabprint(op.get_optionlist(), [22, 4], file=sys.stderr)
         exit(1)
 
     # help情報の表示も自前
     if op.OPT_help.isEnable:
         print("使い方を表示する。")
-        # op.show_optionlist(tab0=24)
         tabprint(op.get_optionlist(), [22, 4])
         exit()
 
     # ここから自分のプログラム
-    # if op.isEnable("all"):
-    #     print("-a, --all : すべて出力、が指定されました。")
+    if op.OPT_all.isEnable:
+        print("-a, --all : すべて出力、が指定されました。")
 
     if op.OPT_["color"].isEnable:
         print('OPT_["color"] is Enable,', f'value = {op.OPT_["color"].value}')
 
-    if op.OPT_all.isEnable:
-        print("-a, --all : すべて出力、が指定されましたよ。")
-
-    if op.OPT_["all"].isEnable:
-        print("-a, --all : すべて出力、が指定されましたよ。")
-
-    if op.OPT_color.isEnable:
-        print(f"-c, --color : 表示色、が指定されましたよ。color={repr(op.OPT_color.value)}")
-        print(f'{op.OPT_color.value=}')
-        # print(f"-c, --color : 表示色、が指定されましたよ。color={repr(op.option['OPT_color'].value)}")
-
-    if op.OPT_['color'].isEnable:
-        print(f"-c, --color : 表示色、が指定されましたよ。color={repr(op.OPT_['color'].value)}")
-
-    # if op.OPT_size.isEnable:
-    #     print(f"-s, --size : 表示サイズ、が指定されましたよ。size={repr(op.OPT_size.value)}")
-
     if op.OPT_size.isEnable:     # type: ignore
-        print(f"-s, --size : 表示サイズ、が指定されましたよ。size={repr(op.OPT_size.value)}")     # type: ignore
+        print(f"-s, --size : 表示サイズ、が指定されました。size={repr(op.OPT_size.value)}")     # type: ignore
 
-    if op.OPT_["OPT_size"].isEnable:     # type: ignore
-        print(f"-s, --size : 表示サイズ、が指定されましたよ。size={repr(op.OPT_['OPT_size'].value)}")     # type: ignore
 
     if op.OPT_ratio.isEnable:
-        print(f"-r, --ratio : 比率を指定する、が指定されましたよ。ratio={repr(op.OPT_ratio.value)}")
+        print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={repr(op.OPT_ratio.value)}")
 
     if op.OPT_["OPT_ratio"].isEnable:
-        print(f"-r, --ratio : 比率を指定する、が指定されましたよ。ratio={repr(op.OPT_['OPT_ratio'].value)}")
+        print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={repr(op.OPT_['OPT_ratio'].value)}")
 
     if op.OPT_extend.isEnable:
-        print("-x, --extend : 特別な奴、が指定されましたよ。")
+        print("-x, --extend : 特別な奴、が指定されました。")
 
     if op.OPT_expect.isEnable:
-        print("-e, --expect : 紛らわしい奴、が指定されましたよ。")
+        print("-e, --expect : 紛らわしい奴、が指定されました。")
