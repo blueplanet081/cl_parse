@@ -94,6 +94,59 @@ def count_prefix(text: str, prefix_char: str, max_count: int = 0) -> int:
 
 
 # -------------------------------------------------------------
+# ストリーム（文字列）から要素（文字）を取り出す勝手ストリーム
+# （一応汎用）
+# -------------------------------------------------------------
+class C_Stream():
+    def __init__(self, sblock: str) -> None:
+        """ 文字列を１文字ずつ取り出すためのクラス（先読み機能あり） """
+        self.buf = sblock
+        self.pos: int = 0
+        self.len = len(sblock)
+
+    def stream(self) -> Iterator[str]:
+        """ ストリームから１要素ずつ取り出す（これだけイテレータ） """
+        while self.pos < self.len:
+            blk = self.buf[self.pos]
+            self.pos += 1
+            yield blk
+
+    def getone(self) -> str:
+        """ ストリームから１要素を取り出す（無ければ空文字） """
+        if self.pos < self.len:
+            ret = self.buf[self.pos]
+            self.pos += 1
+            return ret
+        return ""
+
+    def getn(self, num: int) -> str:
+        """ ストリームからn要素を取り出す（無ければ空文字） """
+        if num <= 0:
+            num = 1
+        ret = self.buf[self.pos: self.pos + num]
+        self.pos += num
+        if self.pos > self.len:
+            self.pos = self.len
+        return ret
+
+    def getall(self) -> str:
+        """ ストリームの残りの全ての要素を取り出す（無ければ空文字） """
+        all = self.buf[self.pos:]
+        self.pos = self.len
+        return all
+
+    def peekone(self) -> str:
+        """ ストリームの次の１要素を見る（無ければ空文字） """
+        if self.pos < self.len:
+            return self.buf[self.pos]
+        return ""
+
+    def peekall(self) -> str:
+        """ ストリームの残りの全ての要素を見る（無ければ空文字） """
+        return self.buf[self.pos:]
+
+
+# -------------------------------------------------------------
 # ターンチェック（一応、汎用クラス）
 # -------------------------------------------------------------
 class CheckTurn():
@@ -302,45 +355,6 @@ class Smode(Enum):
     ONEPAIR = auto()        # 1組モード（オプションとコマンド引数、1組で終了）
     OPTFIRST = auto()       # オプション先モード（コマンド引数後のオプションは無視）
     ARGFIRST = auto()       # コマンド引数先モード（オプション後の引数は無視）
-
-
-# -----------------------------------------------------
-# コマンドライン・ブロックタイプ判定用
-# -----------------------------------------------------
-class Bt(Flag):
-    """ コマンドライン・ブロックタイプ """
-    SOPTn = auto()      # １文字オプションブロックで、最初が数字
-    SOPTs = auto()      # １文字オプションブロックで、最初が数字以外
-    SOPT = SOPTs | SOPTn    # １文字オプションブロック
-    LOPT = auto()       # ロング名オプションブロック
-    SONLY = auto()      # １文字オプション・プリフィックス（"-"） のみ
-    LONLY = auto()      # ロング名オプション・プリフィックス（"--"） のみ
-    NORMAL = auto()     # 通常ブロック
-    NONE = auto()       # None
-    BLANK = auto()      # 空ブロック
-
-
-def check_blocktype(blk: Optional[str], prefix: str) -> Bt:
-    """ コマンドライン・ブロックのタイプを返す """
-    if blk is None:
-        return Bt.NONE      # None
-    bs = iter(blk)
-    c1 = next(bs, None)
-    if c1 is None:          # 空文字列（１文字もなし）
-        return Bt.BLANK         # NONE
-    if c1 != prefix:        # 頭が "-" でない
-        return Bt.NORMAL        # NORMAL（オプション文字列ではない）
-    c2 = next(bs, None)
-    if c2 is None:          # ２文字目以降がない
-        return Bt.SONLY         # SONLY（"-" のみ）
-    if c2 != prefix:        # ２文字目が "-" でない
-        if c2.isdecimal():      # ２文字目が数字
-            return Bt.SOPTn         # SOPTn（"-9xxx"）
-        return Bt.SOPTs         # SOPTs（"-xxxx"）
-    c3 = next(bs, None)
-    if c3 is None:          # ３文字目以降がない
-        return Bt.LONLY         # LONLY（"--" のみ）
-    return Bt.LOPT          # LOPT（"--xxxx"）
 
 
 # -----------------------------------------------------
@@ -594,97 +608,88 @@ class Parse:
         # 解析本文
         b_args = iter(self.__args)      # コマンドライン（文字列のリスト）をイテレータに
         for arg in b_args:
-            # コマンドラインの１ブロックずつ、ブロックタイプを判定
-            blk_type = check_blocktype(arg, self.__option_string_prefix)
+            jst = C_Stream(arg)
+            if arg.startswith("-"):
+                if arg.startswith("--"):    # ロング名オプションブロック（頭が「--」） ----------------
+                    jst.getn(2)
+                    if jst.peekone() == "":     # 「--」のみのブロック
 
-            if blk_type in Bt.LONLY:    # ロング名オプション・プリフィックス（"--"） のみ ==========
-                if t.checkTurn(Turn.ARG):   # ターンチェック（コマンド引数）
-                    if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.ARG)) or \
-                       (self.__smode == Smode.ARGFIRST and t.getTimes(Turn.OPT)):
-                        break
+                        if t.checkTurn(Turn.ARG):   # ターンチェック（コマンド引数）
+                            if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.ARG)) or \
+                               (self.__smode == Smode.ARGFIRST and t.getTimes(Turn.OPT)):
+                                break
+                        wparam = next(b_args, None)     # 次のブロックを取得
+                        if wparam is None:              # 次のブロックが無ければ終了
+                            break
+                        self.__params.append(str(wparam))   # 次のブロックは無条件に「コマンド引数」
+                        continue
 
-                wparam = next(b_args, None)     # 次のブロックを取得
-                if wparam is None:              # 次のブロックが無ければ終了
-                    break
-                self.__params.append(str(wparam))   # 次のブロックは無条件に「コマンド引数」
-                continue
+                    if t.checkTurn(Turn.OPT):   # ターンチェック（オプション）
+                        if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.OPT)) or \
+                           (self.__smode == Smode.OPTFIRST and t.getTimes(Turn.ARG)):
+                            break
 
-            elif blk_type in Bt.LOPT:   # ロング名オプションブロック（頭が「--」） =================
-                if t.checkTurn(Turn.OPT):   # ターンチェック（オプション）
-                    if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.OPT)) or \
-                       (self.__smode == Smode.OPTFIRST and t.getTimes(Turn.ARG)):
-                        break
-
-                opt, oarg = split2(arg[2:], '=')  # オプション名、引数を取得
-                opt = self.__complete_l_option(opt)
-                if opt:     # 正しいロング名オプション ----------
-                    __ops = getattr(self, self.__ltoOPS[opt])
-                    __ops._set_isEnable(True)
-
-                    if __ops.atype:     # オプション引数が必要 ---------
-                        harg = arg  # for 'E12' error_reason
-                        if oarg is None:                    # オプション引数無し（= 以降が無い）
-                            oarg = next(b_args, None)           # 次のブロックを引数として取得
-                            if oarg is None:                    # それも無ければエラー
-                                self.__set_error_reason('E11', arg=arg)
-                                return
-                            harg = harg + " " + oarg  # for 'E12' error_reason
-
-                        ret = self.__set_value(__ops, oarg)    # オプション引数を格納
-                        if not ret:     # オプション引数格納（変換）エラー
-                            self.__set_error_reason('E12', arg=harg)
-                            return
-
-                    else:                   # オプション引数が不要 ---------
-                        if oarg is not None:                     # オプション引数が不要なのに引数あり
-                            self.__set_error_reason('E13', arg=arg)
-                            return
-                else:       # ロング名オプションが正しくない ----
-                    self.__set_error_reason('E14', arg=arg)
-                    return
-
-            elif blk_type in Bt.SOPT | Bt.SONLY:    # 1文字オプションブロック（頭が「-」）===========
-                # プリフィックスのみ、とりあえず無視 ★★★
-                if t.checkTurn(Turn.OPT):   # ターンチェック（オプション）
-                    if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.OPT)) or \
-                       (self.__smode == Smode.OPTFIRST and t.getTimes(Turn.ARG)):
-                        break
-
-                c_arg = iter(arg[1:])
-                for opt in c_arg:
-                    if opt in self.__s_options:   # 正しい1文字オプション -----------
-                        __ops = getattr(self, self.__stoOPS[opt])
+                    opt, oarg = split2(str(jst.getall()), '=')  # オプション名、引数を取得
+                    opt = self.__complete_l_option(opt)
+                    if opt:     # 正しいロング名オプション ----------
+                        __ops = getattr(self, self.__ltoOPS[opt])
                         __ops._set_isEnable(True)
 
-                        if __ops.atype:             # オプション引数が必要か
-                            oparg = "".join([c for c in c_arg])    # 後続文字列からオプション引数を取得
-                            harg = arg  # for 'E22' error_reason
-
-                            if not oparg:           # 無ければ、
-                                oparg = next(b_args, None)  # 次のブロックを取得
-                                if not oparg:               # それも無ければエラー
-                                    self.__set_error_reason('E21', opt=opt, arg=arg)
+                        if __ops.atype:     # オプション引数が必要 ---------
+                            harg = arg  # for 'E12' error_reason
+                            if oarg is None:                    # オプション引数無し（= 以降が無い）
+                                oarg = next(b_args, None)           # 次のブロックを引数として取得
+                                if oarg is None:                    # それも無ければエラー
+                                    self.__set_error_reason('E11', arg=arg)
                                     return
-                                harg = harg + " " + oparg   # for 'E22' error_reason
-
-                            ret = self.__set_value(__ops, oparg)  # オプション引数を格納
+                                harg = harg + " " + oarg  # for 'E12' error_reason
+                            ret = self.__set_value(__ops, oarg)    # オプション引数を格納
                             if not ret:     # オプション引数格納（変換）エラー
-                                self.__set_error_reason('E22', opt=opt, arg=harg)
+                                self.__set_error_reason('E12', arg=harg)
                                 return
-                    else:                       # 1文字オプションが正しくない ------
-                        self.__set_error_reason('E23', opt=opt, arg=arg)
+                        else:                   # オプション引数が不要 ---------
+                            if oarg is not None:                     # オプション引数が不要なのに引数あり
+                                self.__set_error_reason('E13', arg=arg)
+                                return
+                    else:       # ロング名オプションが正しくない ----
+                        self.__set_error_reason('E14', arg=arg)
                         return
 
-            else:   # コマンド引数ブロック（頭が「―」以外）===========================================
-                # bt.LOPT、bt.LONLY、bt.SOPT、Bt.SONLY 以外（Bt.NORMAL、Bt.NONE、Bt.BLANK）
+                else:                       # 1文字オプションブロック（頭が「-」） ------------------
+                    if t.checkTurn(Turn.OPT):   # ターンチェック（オプション）
+                        if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.OPT)) or \
+                           (self.__smode == Smode.OPTFIRST and t.getTimes(Turn.ARG)):
+                            break
+                    jst.getone()
+                    for opt in jst.stream():
+                        if opt in self.__s_options:   # 正しい1文字オプション -----------
+                            __ops = getattr(self, self.__stoOPS[opt])
+                            __ops._set_isEnable(True)
+
+                            if __ops.atype:             # オプション引数が必要か
+                                oparg = jst.getall()    # 後続文字列からオプション引数を取得
+                                harg = arg  # for 'E22' error_reason
+                                if not oparg:           # 無ければ、
+                                    oparg = next(b_args, None)  # 次のブロックを取得
+                                    if not oparg:               # それも無ければエラー
+                                        self.__set_error_reason('E21', opt=opt, arg=arg)
+                                        return
+                                    harg = harg + " " + oparg   # for 'E22' error_reason
+                                ret = self.__set_value(__ops, oparg)  # オプション引数を格納
+                                if not ret:     # オプション引数格納（変換）エラー
+                                    self.__set_error_reason('E22', opt=opt, arg=harg)
+                                    return
+                        else:                       # 1文字オプションが正しくない ------
+                            self.__set_error_reason('E23', opt=opt, arg=arg)
+                            return
+
+            else:   # コマンド引数ブロック（頭が「―」以外） -----------------------------------------
                 if t.checkTurn(Turn.ARG):   # ターンチェック（コマンド引数）
                     if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.ARG)) or \
                        (self.__smode == Smode.ARGFIRST and t.getTimes(Turn.OPT)):
                         break
-
                 self.__params.append(arg)
-
-        else:   # ループ終了
+        else:   # 全終了
             self.__error = False
             return
 
