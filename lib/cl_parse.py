@@ -8,9 +8,8 @@ import pathlib
 import platform
 from datetime import datetime as dt
 from enum import Enum, EnumMeta, Flag, IntFlag, auto
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Iterable
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from typing import TextIO
-# from collections.abc import Iterable
 
 
 exist_debugmodule = False
@@ -25,7 +24,7 @@ try:
 
 except ModuleNotFoundError:
     exist_debugmodule = False
-    print("debugmoduleをインストールしていません")
+    # print("debugmoduleをインストールしていません")
 
 
 # -------------------------------------------------------------
@@ -250,6 +249,19 @@ def sepalate_items__(
 sepalate_items = Mu2(Mu, sepalate_items__)
 # sepalate_items(type=int_literal, sep='x', count=2) みたいな使い方をする
 
+
+def str_choices__(arg: str, choices: List[str]) -> str:
+    """ オプション引数が選択肢()内にあるかどうか判定する。
+        エラー時の処理が cl_parse 用
+    """
+    if arg not in choices:
+        raise ValueError(f'choices error. "{arg}" not in {choices}')
+    return arg
+
+
+str_choices = Mu2(Mu, str_choices__)
+
+
 # int_literal = functools.partial(int, base=0)
 int_literal = Mu(int, base=0)           # 数値リテラル（"0x4F3e"みたいな）を解釈するタイプ
 date = Mu(dt.strptime, '%Y/%m/%d')      # 日付 <年>/<月>/<日> 入力
@@ -258,21 +270,21 @@ date = Mu(dt.strptime, '%Y/%m/%d')      # 日付 <年>/<月>/<日> 入力
 # -----------------------------------------------------
 # cl_parse 内部使用関数
 # -----------------------------------------------------
-def cnv_enum(atype: EnumMeta, ename: str) -> Any:
-    """ 列挙型(atype)の「名前(ename)から、列挙型メンバーを作成する
+def cnv_enum(afunc: EnumMeta, ename: str) -> Any:
+    """ 列挙型(afunc)の「名前(ename)から、列挙型メンバーを作成する
         （Flag、IntFlagの演算子は | のみ解釈）
     """
     # 型ヒントをどのように書けば良いのか、模索中 ^^;
 
-    wmembers = list(atype.__members__.keys())
+    wmembers = list(afunc.__members__.keys())
     try:
-        if atype.__base__ is Flag or IntFlag:
+        if afunc.__base__ is Flag or IntFlag:
             flist = [t.strip() for t in ename.split('|')]
-            ret = atype[flist[0]]
+            ret = afunc[flist[0]]
             for t in flist[1:]:
-                ret |= atype[t]
+                ret |= afunc[t]
             return ret
-        return atype[ename]
+        return afunc[ename]
 
     except KeyError as e:
         raise ValueError(f"option argument {e} must be a member of {wmembers}")
@@ -294,10 +306,21 @@ emsg = {
     "E99": "{eno}: unknown error opt={opt}, arg={arg}, ext0={ext0}, ext1={ext1}",
 }
 
+
 # -----------------------------------------------------
-# Option/Option argument type 文字列セット
+# オプション引数のタイプ
 # -----------------------------------------------------
-_OATYPE_SET = ["OPTIONAL"]
+class Ot(Flag):
+    NORMAL = 0
+    OPTIONAL = auto()       # オプション引数省略可能
+    APPEND = auto()         # オプション引数をリストに格納
+
+
+_OATYPE_SET = {
+        "OPTIONAL": Ot.OPTIONAL,
+        "APPEND": Ot.APPEND,
+    }
+
 
 # -----------------------------------------------------
 # 解析用条件
@@ -356,12 +379,13 @@ def check_blocktype(blk: Optional[str], prefix: str) -> Bt:
 # -----------------------------------------------------
 class Opset:
     def __init__(self, l_options: List[str], s_options: List[str],
-                 comment: str, acomment: str, atype: Any) -> None:
+                 comment: str, acomment: str, afunc: Any, atype: Ot) -> None:
         """ オプションセット格納用クラス """
         self.__l_options = l_options
         self.__s_options = s_options
         self.__comment = comment        # コメント
         self.__acomment = acomment      # オプション引数のコメント
+        self.__afunc = afunc            # オプション引数の処理タイプ
         self.__atype = atype            # オプション引数のタイプ
 
         self.__isEnable: bool = False   # オプション有効/無効
@@ -384,6 +408,10 @@ class Opset:
         return self.__acomment
 
     @property
+    def afunc(self) -> Any:
+        return self.__afunc
+
+    @property
     def atype(self) -> Any:
         return self.__atype
 
@@ -399,7 +427,12 @@ class Opset:
         return self.__value
 
     def _set_value(self, value: bool):
-        self.__value = value
+        if Ot.APPEND in self.__atype:
+            if self.__value is None:
+                self.__value = []
+            self.__value.append(value)
+        else:
+            self.__value = value
 
 
 # -----------------------------------------------------
@@ -446,7 +479,7 @@ class Parse:
         self.__params: List[str] = []           # コマンド引数リスト
         self.__error: bool = True               # 解析エラーがあったかどうか
         self.__error_reason: Dict[str, str] = {"eno": "N00"}    # エラー理由
-        self.__additional_emsg = ""             # 追加のエラーメッセージ
+        self.__additional_emsg: List[str] = []  # 追加のエラーメッセージ
         self.__remain: List[str] = []           # 解析の残り
 
         # コマンドライン解析処理実行
@@ -454,7 +487,6 @@ class Parse:
 
         # デバッグモード
         if self.__debugmode and exist_debugmodule:
-            # __dmode = str(self.__debugmode)[1:]
             cld.show_debug(self, str(self.__debugmode)[1:])
 
     # -----------------------------------------------------
@@ -463,12 +495,12 @@ class Parse:
     def __set_options(self, options: List[List[Any]]) -> None:
         """ オプションセットを読み込む """
         def is_optionstringS(text: str) -> bool:
-            """ オプション文字列・文字種チェック """
+            """ １文字オプション文字列・文字種チェック """
             return text.replace("-", "").replace("_", "").isalnum() or text == "?"
 
         def is_optionstringL(text: str) -> bool:
-            """ オプション文字列・文字種チェック """
-            return text.replace("-", "").replace("_", "").isalnum()
+            """ ロング名オプション文字列・文字種チェック """
+            return text[-1] != "-" and text.replace("-", "").replace("_", "").isalnum()
 
         def is_optionname(text: str) -> bool:
             """ オプション名・文字種チェック """
@@ -504,7 +536,6 @@ class Parse:
             # 一個ずつチェックして格納
             for s in option_strings:
                 count = count_prefix(s, self.__option_string_prefix, max_count=0)
-                print(s, count)
                 if count == 1:      # 1文字オプション
                     assert is_optionstringS(s[1:]), f'illegal option string [{s}] in {iopset}'
                     s_options.append(s[1:])
@@ -522,25 +553,25 @@ class Parse:
             ioacomment = "" if ioacomment is None else ioacomment
 
             # iopset[3] : オプション引数のタイプ（存在しなければ None）
+            iatype: Ot = Ot.NORMAL
             if iopset[3] is not None:
-                ioatype: Optional[List[Any]] = []
-                if type(iopset[3]) in [list, tuple]:
-                    for item in iopset[3]:
-                        assert callable(item) or (item in _OATYPE_SET), \
-                            f'illegal "option/ option argument type" [{item}] in {iopset}'
-                        ioatype.append(item)
-                else:
-                    assert callable(iopset[3]) or (iopset[3] in _OATYPE_SET), \
-                        f'illegal "option/ option argument type" [{iopset[3]}] in {iopset}'
-                    ioatype.append(iopset[3])
+                ioafunc: Optional[List[Any]] = []
+                if type(iopset[3]) not in [list, tuple]:
+                    iopset[3] = [iopset[3]]
+                for item in iopset[3]:
+                    assert callable(item) or (item in _OATYPE_SET.keys()), \
+                        f'illegal "option/ option argument type" [{item}] in {iopset}'
+                    if item in _OATYPE_SET.keys():
+                        iatype = iatype | _OATYPE_SET[item]
+                    else:
+                        ioafunc.append(item)
+                if not ioafunc:
+                    ioafunc.append(str)
             else:
-                ioatype = None
-
-            # assert ioatype is None or callable(ioatype), \
-            #     f'illegal type of "option-argument type" {iopset}'
+                ioafunc = None
 
             # オプション属性を作成
-            setattr(self, opt_name, Opset(l_options, s_options, icomment, ioacomment, ioatype))
+            setattr(self, opt_name, Opset(l_options, s_options, icomment, ioacomment, ioafunc, iatype))
             self.__D_option[iopset[0]] = getattr(self, opt_name)     # オプション情報 Dictバージョン
             self.__options.append(opt_name)
             for s in l_options:
@@ -604,15 +635,16 @@ class Parse:
                 # opt: 入力されたロング名オプション
                 # oarg: None 「=」が無い「--<opt> のみ」
                 # oarg: None以外 「=」に続いて入力されたオプション引数「--<opt>=<oarg>」
+
                 opt = self.__complete_l_option(opt)
                 if opt:     # 正しいロング名オプション ----------
                     __ops = getattr(self, self.__ltoOPS[opt])
                     __ops._set_isEnable(True)
 
-                    if __ops.atype:     # オプション引数が必要 ---------
+                    if __ops.afunc:     # オプション引数が必要 ---------
                         harg = arg  # for 'E12' error_reason
                         if oarg is None:                    # オプション引数無し（= 以降が無い）
-                            if __ops.atype[0] == "OPTIONAL":    # オプション引数省略可能
+                            if Ot.OPTIONAL in __ops.atype:    # オプション引数省略可能
                                 self.__set_value(__ops, None)
                             else:
                                 oarg = next(b_args, None)           # 次のブロックを引数として取得
@@ -624,11 +656,11 @@ class Parse:
 
                                 # for 'E12' error_reason
                                 harg = harg + " " + ('"None"' if oarg is None else oarg)
-
-                        ret = self.__set_value(__ops, oarg)    # オプション引数を格納
-                        if not ret:     # オプション引数格納（変換）エラー
-                            self.__set_error_reason('E12', arg=harg)
-                            return
+                        else:
+                            ret = self.__set_value(__ops, oarg)    # オプション引数を格納
+                            if not ret:     # オプション引数格納（変換）エラー
+                                self.__set_error_reason('E12', arg=harg)
+                                return
 
                     else:                   # オプション引数が不要 ---------
                         if oarg is not None:                     # オプション引数が不要なのに引数あり
@@ -638,8 +670,7 @@ class Parse:
                     self.__set_error_reason('E14', arg=arg)
                     return
 
-            elif blk_type in Bt.SOPT | Bt.SONLY:    # 1文字オプションブロック（頭が「-」）===========
-                # プリフィックスのみ、とりあえず無視 ★★★
+            elif blk_type in Bt.SOPT:    # 1文字オプションブロック（頭が「-」）=======================
                 if t.checkTurn(Turn.OPT):   # ターンチェック（オプション）
                     if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.OPT)) or \
                        (self.__smode == Smode.OPTFIRST and t.getTimes(Turn.ARG)):
@@ -651,7 +682,7 @@ class Parse:
                         __ops = getattr(self, self.__stoOPS[opt])
                         __ops._set_isEnable(True)
 
-                        if __ops.atype:             # オプション引数が必要か
+                        if __ops.afunc:             # オプション引数が必要か
                             oparg = "".join([c for c in c_arg])    # 後続文字列からオプション引数を取得
                             harg = arg  # for 'E22' error_reason
 
@@ -673,7 +704,7 @@ class Parse:
                         self.__set_error_reason('E23', opt=opt, arg=arg)
                         return
 
-            else:   # コマンド引数ブロック（頭が「―」以外）===========================================
+            else:   # コマンド引数ブロック（頭が「―」以外、または「-」単独）==========================
                 # bt.LOPT、bt.LONLY、bt.SOPT、Bt.SONLY 以外（Bt.NORMAL、Bt.NONE、Bt.BLANK）
                 if t.checkTurn(Turn.ARG):   # ターンチェック（コマンド引数）
                     if (self.__smode == Smode.ONEPAIR and t.isRepeat(Turn.ARG)) or \
@@ -696,26 +727,26 @@ class Parse:
         if optarg is None:
             __ops._set_value(optarg)
             return True
-        for __atype in __ops.atype:
-            if callable(__atype):
+        for __afunc in __ops.afunc:
+            if callable(__afunc):
                 try:
                     # 「str」の時はそのまま格納
-                    if __atype is str:
+                    if __afunc is str:
                         __ops._set_value(optarg)
 
                     # Enum、Flag類
-                    elif isinstance(__atype, EnumMeta):
-                        __ops._set_value(cnv_enum(__atype, optarg))
+                    elif isinstance(__afunc, EnumMeta):
+                        __ops._set_value(cnv_enum(__afunc, optarg))
 
                     # 直接変換呼び出しできるもの
                     else:
-                        __ops._set_value(__atype(optarg))
+                        __ops._set_value(__afunc(optarg))
 
-                    self.__additional_emsg = ""
+                    self.__additional_emsg = []
                     return True
 
                 except ValueError as e:     # 変換エラー
-                    self.__additional_emsg = str(e)
+                    self.__additional_emsg.append(str(e))
                     # return False
         return False
 
@@ -773,8 +804,9 @@ class Parse:
             level=0、1(追加メッセージ含む)、以下もしかしたら追加予定
         """
         __message = self.__error_message(**self.__error_reason)
-        if level >= 1 and self.__additional_emsg:
-            __message += "\n-- " + self.__additional_emsg
+        if level >= 1:
+            for _msg in self.__additional_emsg:
+                __message += "\n  -- " + _msg
         return __message
 
     # cl改用★★★
@@ -797,7 +829,7 @@ class Parse:
                 loption += self.__option_string_prefix * 2 + s + ', '
 
             option = (soption + loption).rstrip(', ')
-            if op.atype:
+            if op.afunc:
                 option += " " + op.acomment
 
             optionlist.append([option, ": " + op.comment])
@@ -814,7 +846,6 @@ class Parse:
 # -------------------------------------------------------------------------------------
 if __name__ == '__main__':
     import sys
-
     class Color(IntFlag):
         RED = auto()
         GREEN = auto()
@@ -827,7 +858,8 @@ if __name__ == '__main__':
         # args = 'this.py -al BLUE|RED|GREEN ABC --display 1024x0X40 --exp -ar ---# 0.5 --ext 0x4a4f'.split()
         # args = 'this.py -al BLUE|RED|GREEN ABC --display 1024x0X40 --exp -ar 0.5 --ext 0x4a4f'.split()
         # args = 'this.py -a --date 2020/1/1'.split()
-        args = 'this.py -a --ratio= ABC ---#'.split()
+        args = 'this.py -a --ratio ABC --date=TOMORROW --color=RED --ratio=3 - ---#'.split()
+        args = 'this.py -a  ABC --ratio -xabc --date=TOMORROW --color=RED --ratio=3 --ratio=2.5 - ---#'.split()
         # args = 'this.py -a -r-5.0x ---#2'.split()
         pass
 
@@ -835,12 +867,12 @@ if __name__ == '__main__':
     options = [
             ["help", "-h, -q , --sdf, --help", "使い方を表示する", None],
             ["all", "-a, --all", "すべて出力"],
-            # ["date", "-d --date", "対象日//<年/月/日>", date],
+            ["date", "-d, --date", "対象日//<年/月/日>", (date, str_choices(["TODAY", "TOMORROW"]))],
             ["color", "-c, --color, -l", "表示色//<color>", Color],
             ["OPT_size", " --size, --display", "表示サイズを指定する//<縦x横>",
                 sepalate_items(type=int_literal, sep='x', count=2)],
-            ["OPT_ratio", "-r,--ratio", "比率を指定する//<比率>", ["OPTIONAL", int, float, str]],
-            ["extend", "-x, --extend ", "特別な奴"],
+            ["OPT_ratio", "-r,--ratio", "比率を指定する//<比率>", ["OPTIONAL",int, float, str, "APPEND"]],
+            ["extend", "-x, --extend ", "特別な奴", "OPTIONAL"],
             ["expect", "-e, --expect", "紛らわしい奴"],
     ]
 
@@ -849,7 +881,8 @@ if __name__ == '__main__':
 
     # 解析エラー時の処理は自前で行う
     if op.is_error:
-        print(op.get_errormessage(1), file=sys.stderr)
+        # print(op.get_errormessage(1), file=sys.stderr)
+        print(op.get_errormessage(), file=sys.stderr)
         print("オプション一覧", file=sys.stderr)
         tabprint(op.get_optionlist(), [22, 4], file=sys.stderr)
         exit(1)

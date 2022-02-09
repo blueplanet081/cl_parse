@@ -11,7 +11,7 @@ def show_templatex(op: cl.Parse, options: Union[List[str], Dict[str, cl.Opset]])
 
     def __show_one(stropt: str, objopt: Any):
         print((f'if op.{stropt}.isEnable:').ljust(30), f"# {objopt.comment}")
-        if objopt.atype:
+        if objopt.afunc:
             print(f'    value = op.{stropt}.value')
         elif "help" in objopt.l_options:
             print('    print("使用方法を書く")')
@@ -41,6 +41,7 @@ def show_definitionlist(op: cl.Parse) -> None:
         print(f'    s_options = {opx.s_options}')
         print(f'    l_options = {opx.l_options}')
         print(f'    comment = [{opx.comment}], acomment = [{opx.acomment}]')
+        print(f'    afunc = {opx.afunc}')
         print(f'    atype = {opx.atype}')
 
 
@@ -49,7 +50,7 @@ def show_result(op: cl.Parse) -> None:
     for opt in op.option_attrs:
         opx = getattr(op, opt)
         strvalue = ""
-        if opx.atype:
+        if opx.afunc:
             strvalue = str(opx.value)
             if type(opx.value) is str:
                 strvalue = "'"+strvalue+"'"     # 文字列(str)なら''で囲って表示する
