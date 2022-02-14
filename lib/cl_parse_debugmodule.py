@@ -43,6 +43,13 @@ def show_definitionlist(op: cl.Parse) -> None:
         print(f'    comment = [{opx.comment}], acomment = [{opx.acomment}]')
         print(f'    afunc = {opx.afunc}')
         print(f'    atype = {opx.atype}')
+    print()
+    if len(op._Parse__exclusive):
+        print("exclusive =")
+    else:
+        print("exclusive = []")
+    for pair in op._Parse__exclusive:
+        print(f'    {pair}')
 
 
 def show_result(op: cl.Parse) -> None:
@@ -50,7 +57,7 @@ def show_result(op: cl.Parse) -> None:
     for opt in op.option_attrs:
         opx = getattr(op, opt)
         strvalue = ""
-        if opx.afunc:
+        if opx.afunc or opx.atype:
             strvalue = str(opx.value)
             if type(opx.value) is str:
                 strvalue = "'"+strvalue+"'"     # 文字列(str)なら''で囲って表示する
@@ -58,20 +65,37 @@ def show_result(op: cl.Parse) -> None:
               f"=> {str(opx.isEnable).ljust(5)}  {strvalue}")
 
 
+def show_errormessage() -> None:
+    import cl_parse as cl
+
+    """ 解析エラーメッセージ一覧を表示する（デバッグ用） """
+    # for eno in cl.emsg:
+    #     print(cl.Parse._Parse__error_message(eno,
+    #                 arg="<ARG>", opt="<OPT>", ext0="<EXT0>", ext1="<EXT1>"))
+    # print()
+    cl.Parse.show_errormessage()
+    print()
+    print(cl.emsg)
+
+
 def show_debug(op: cl.Parse, __dmode: str):
     """ デバッグ表示振り分け """
     if __dmode.startswith("##"):
         if __dmode == "##":
-            print("オプション設定一覧x")
+            print("オプション設定一覧")
             show_definitionlist(op)
             exit()
         elif __dmode == "##1":
-            print("テンプレート１x")
+            print("テンプレート１")
             show_templatex(op, op.option_attrs)
             exit()
         elif __dmode == "##2":
-            print("テンプレート２x")
+            print("テンプレート２")
             show_templatex(op, op._Parse__D_option)
+            exit()
+        elif __dmode == "##e":
+            print("エラーメッセージ一覧")
+            show_errormessage()
             exit()
 
     elif __dmode.startswith("#"):

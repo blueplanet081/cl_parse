@@ -2,14 +2,18 @@ import sys
 from enum import Flag, auto
 
 from lib import cl_parse as cl
+from datetime import datetime as dt
 
 # import functools
+
+# date = cl.Mu(dt.strptime, '%Y/%m/%d')      # 日付 <年>/<月>/<日> 入力
 
 
 args = sys.argv
 if len(args) <= 1:
     # 試験用コマンドライン
-    args = 'this.py # ---# -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --date 2021/10/3'.split()
+    args = 'this.py # ---##e -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --date 2021/10/30'.split()
+    # args = 'this.py # ---# -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --date '.split()
 
 
 class Color(Flag):
@@ -37,6 +41,7 @@ options = [
         # ["all", "/a, //all", "すべて出力"],
         ["help", "-?, --help", "使い方を表示する", None],
         ["all", "-a, --all", "すべて出力"],
+        # ["date", "-d, --date", "対象日//<年/月/日>", cl.date],
         ["date", "-d, --date", "対象日//<年/月/日>", cl.date],
         ["color", "-c, --color", "表示色//<color>", Color],
         ["size", "-s, --size", "表示サイズを指定する//<縦x横>",
@@ -46,8 +51,13 @@ options = [
         ["expect", "-e, --expect", "紛らわしい奴"],
 ]
 
+exclusive = ["all", "ratio"]
+
+cl.emsg["E31"] = ": オプション ({ext0}) と ({ext1}) は同時に指定できませんよ。"
+
+
 # cl_parse 呼び出し（解析実行）
-op = cl.Parse(options, args, debug=True)
+op = cl.Parse(options, args, debug=True, exclusive=exclusive)
 # op = cl.Parse(options, args, option_string_prefix="/", debug=True)
 
 # 解析エラー時の処理は自前で行う
