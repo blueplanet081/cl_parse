@@ -33,6 +33,7 @@ if op.OPT_help.isEnable:       # 使い方を表示する
     cl.tabprint(op.get_optionlist())
     exit()
 
+# 解析結果
 if op.OPT_all.isEnable:        # すべて出力
     print("オプション 'all' が指定されました。")
 

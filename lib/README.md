@@ -65,72 +65,104 @@ mp_sample04c.py   | 区切りながら、その都度リセットして最後ま
 
 </br>
 
+---
+
 ## **使い方（超簡易版）**
 
 ```py
 import sys
-import miniparse as mp
+from lib import cl_parse as cl
 
-pms: mp.TypeOpList = [('', False, 'ファイル名'),
-                      ('l', False, '', '詳細情報も表示する'),
-                      ('h', False, '', '使い方を表示する'),
-                      ('help', False, '', '使い方を表示する'),
-                      ]
-opp = mp.OpSet(pms)
-mp.miniparse(opp, sys.argv)
+options = [
+        ["help", "-h, --help", "使い方を表示する", None],
+        ["all", "-a, --all", "すべて出力"],
+        ["date", "-d, --date", "対象日//<年/月/日>", cl.strptime('%Y/%m/%d')],
+        ["size", "-s, --size", "表示サイズを指定する//<縦x横>",
+                               cl.sepalate_items(type=int, sep='x', count=0)],
+]
 
+# cl_parse 呼び出し（解析実行）
+args = sys.argv
+op = cl.Parse(args, options, debug=True)
 ```
 
-  1. miniparse を importする。
-  2. オプション情報を定義、クラス OpSet()のインスタンスを作成する。
-  3. 上記のインスタンス、コマンドライン引数を指定して、コマンドライン解析関数 miniparse() を呼び出す。
 </br>
+
+ > 1. cl_parse を importする。
+ > 2. オプション情報を定義する。
+ > 3. 解析するコマンドライン、オプション情報で、*\<cl_parse\>.* **Parse()** を呼び出す。
+
 </br>
-</br>
+
+---
 
 ```py
-''' オプションの取得 '''
-for op in opp.get_keys():
-    if opp.isTrue(op):
-        if len(op) == 0 and opp.get_opArg(op):
-            print('コマンド引数が入力された。', opp.get_opArg(op))
-        if len(op) == 1:
-            print(f'option -{op} が指定された。')
-        if len(op) > 1:
-            print(f'option --{op} が指定された。')
-
-''' コマンド引数の取得 '''
-arglist = mp.get_arguments()
-if arglist:
+# 解析エラー時の処理は自前で行う
+if op.is_error:
+    print(op.get_errormessage(1), file=sys.stderr)
     print()
-    print('コマンド引数リスト = ')
-    for arg in arglist:
-        print(f'  [{arg}]')
-
-''' HELPメッセージ出力サンプル '''
-if opp.isTrue('h') or opp.isTrue('help'):
-    print('このプログラムは、モジュール miniparse の使い方を示すものです。')
-    mp.printUsage('', opp, mp.Umode.BOTH)
-
-
+    print("オプション一覧", file=sys.stderr)
+    cl.tabprint(op.get_optionlist(), file=sys.stderr)
+    exit(1)
 ```
 
-  - get_keys()  </br>
-  　　オプション文字、文字列の一覧を返す。
-  - isTrue(op) </br>
-  　　コマンドラインでそのオプション文字、または文字列（op）が指定されたら True。
-  - get_arguments() </br>
-  　　コマンドラインで指定された、コマンド引数のリストを返す。
-  - printUsage(コマンド名、OpSetのインスタンス、Umode)　</br>
-  　　簡単な Usage:を出力する。
-    - コマンド名（省略時は、デフォルトのコマンド名）
-    - Umode
-      - Umode.USAGE　　Usage行のみ出力する
-      - Umode.OLIST　　オプションリストを出力する
-      - Umode.BOTH　 　Usage: とオプションリストの両方を出力する
 </br>
+
+  1. 解析エラー時には、 *\<option\>.* **is_error** が **True** になる。その後の動作はユーザープログラム側に任される。
+  2. 解析エラーの理由は、*\<option\>.* **get_errormessage()** で取得する。
+  3. 定義されたオプション情報の一覧を、*\<option\>.* **get_optionlist()** で取得できる。
+  4. *\<cl_parse\>.* **tabprint()** は、一覧表を表示するためのサービス関数。
+
 </br>
+
+---
+
+```py
+# help情報の表示も自前
+if op.OPT_help.isEnable:       # 使い方を表示する
+    print("これは cl_parse のサンプルプログラムです。\n")
+    print("オプション一覧")
+    cl.tabprint(op.get_optionlist())
+    exit()
+```
+
 </br>
+
+  1. オプションに -h、--help などが指定された場合の、オプション情報の定義やhelp情報の表示もユーザープログラム側に任される。
+  2. オプションが指定された時の判断（上記で *\<option\>.* **OPT_help.isEnable**）は、次項を参照。
+  3. オプション情報の一覧の取得や表示は、前項を参照。
+
+</br>
+
+---
+
+```py
+# 解析結果
+if op.OPT_all.isEnable:        # すべて出力
+    print("オプション 'all' が指定されました。")
+
+if op.OPT_date.isEnable:       # 対象日
+    print("オプション 'date' が指定されました。")
+    print(f'    {op.OPT_date.value=}')
+    print()
+
+if op.OPT_size.isEnable:       # 表示サイズを指定する
+    print("オプション 'size' が指定されました。")
+    print(f'    {op.OPT_size.value=}')
+    print()
+```
+
+
+</br>
+
+  1. オプションに -h、--help などが指定された場合の、オプション情報の定義やhelp情報の表示もユーザープログラム側に任される。
+  2. オプションが指定された時の判断（上記で *\<option\>.* **OPT_help.isEnable**）は、次項を参照。
+  3. オプション情報の一覧の取得や表示は、前項を参照。
+
+</br>
+
+---
+
 
 ## コマンドラインの構成とか、言葉の定義とかルール
 注）ここで記述している内容は、本モジュールでのコマンドラインの扱いで、オフィシャルなものとかではありません。
