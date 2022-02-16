@@ -12,7 +12,7 @@ from datetime import datetime as dt
 args = sys.argv
 if len(args) <= 1:
     # 試験用コマンドライン
-    args = 'this.py # ---##e -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --date 2021/10/30'.split()
+    args = 'this.py # ---# -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --date 2021/10/30'.split()
     # args = 'this.py # ---# -ac BLUE|RED|GREEN ABC --size 1024x0X40  --exp -ar 0.5 --date '.split()
 
 
@@ -57,7 +57,7 @@ cl.emsg["E31"] = ": オプション ({ext0}) と ({ext1}) は同時に指定で�
 
 
 # cl_parse 呼び出し（解析実行）
-op = cl.Parse(options, args, debug=True, exclusive=exclusive)
+op = cl.Parse(args, options, debug=True, exclusive=exclusive)
 # op = cl.Parse(options, args, option_string_prefix="/", debug=True)
 
 # 解析エラー時の処理は自前で行う

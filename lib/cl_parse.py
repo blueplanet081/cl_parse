@@ -237,7 +237,6 @@ def sepalate_items__(
     """ オプション引数をセパレータ(sep)で指定個数(count)に分割して解釈する。
         エラー時の処理が cl_parse 用
     """
-    print("HiHi!")
     motos = moto.split(sep)
     if count != 0 and len(motos) != count:
         raise ValueError(f"sepalate items count error. required {count} "
@@ -266,7 +265,7 @@ str_choices = Mu2(Mu, str_choices__)
 # int_literal = functools.partial(int, base=0)
 int_literal = Mu(int, base=0)           # 数値リテラル（"0x4F3e"みたいな）を解釈するタイプ
 date = Mu(dt.strptime, '%Y/%m/%d')      # 日付 <年>/<月>/<日> 入力
-
+strptime = Mu2(Mu, dt.strptime)
 
 # -----------------------------------------------------
 # cl_parse 内部使用関数
@@ -451,8 +450,9 @@ class Opset:
 # パーサー本体
 # -----------------------------------------------------
 class Parse:
-    def __init__(self, options: List[List[Any]],
+    def __init__(self,
                  args: List[str],                   # 解析するコマンドライン
+                 options: List[List[Any]],
                  exclusive: Union[List[List[str]], List[str]] = [],     # 排他リスト
                  cancelable: bool = False,          # オプションキャンセル可能モード
                  smode: Smode = Smode.NONE,         # 解析モード
@@ -490,7 +490,6 @@ class Parse:
             self.__emessage_header = pathlib.Path(sys.argv[0]).stem
         else:
             self.__emessage_header = emessage_header
-        print(self.__emessage_header)
 
         # オプション情報（Dict タイプ）
         self.__D_option: Dict[str, Opset] = {}  # OPT_["option"] で取得する
@@ -737,21 +736,19 @@ class Parse:
                                 self.__store_value(__ops, None)
                                 continue
                             else:
-                                print("Here am I!")
                                 oarg = next(b_args, None)           # 次のブロックを引数として取得
                                 blk_type = check_blocktype(oarg, self.__option_string_prefix)
-                                if blk_type not in Bt.NORMAL | Bt.SOPTn:
-                                    # if oarg is None:                    # それも無ければエラー
+                                if blk_type not in Bt.NORMAL | Bt.SOPTn:    # それも無ければエラー
                                     self.__set_error_reason('E11', arg=arg)
                                     return
 
                                 # for 'E12' error_reason
                                 harg = harg + " " + ('"None"' if oarg is None else oarg)
-                        # else:
-                            ret = self.__store_value(__ops, oarg)    # オプション引数を格納
-                            if not ret:     # オプション引数格納（変換）エラー
-                                self.__set_error_reason('E12', arg=harg)
-                                return
+
+                        ret = self.__store_value(__ops, oarg)    # オプション引数を格納
+                        if not ret:     # オプション引数格納（変換）エラー
+                            self.__set_error_reason('E12', arg=harg)
+                            return
 
                     else:               # オプション引数が不要 ---------
                         if oarg is not None:                     # オプション引数が不要なのに引数あり
@@ -833,7 +830,6 @@ class Parse:
 
     def __store_value(self, __ops: Opset, optarg: Any) -> bool:
         """ このオプションのオプション引数を格納する。エラー時には Falseを返す """
-        print("this is _store_value function")
         if optarg is None:
             __ops._store_value(optarg)
             return True
@@ -957,12 +953,6 @@ class Parse:
             print(Parse.__error_message(eno,
                         arg="<ARG>", opt="<OPT>", ext0="<EXT0>", ext1="<EXT1>"))
 
-    @staticmethod
-    def update_errormessage(new_emsg: Dict[str, str]) -> None:
-        emsg.update(new_emsg)
-        # wemsg = emsg | new_emsg
-        # emsg = wemsg
-
 
 # -------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -1026,13 +1016,14 @@ if __name__ == '__main__':
 
     Parse.show_errormessage()
     # cl_parse 呼び出し（解析実行）
-    op = Parse(options, args, exclusive=exclusive, cancelable=True, debug=True, emessage_header="@stem")
+    op = Parse(args, options, exclusive=exclusive, cancelable=True, debug=True, emessage_header="@stem")
     # op = Parse(options, args, exclusive=exclusive, cancelable=True, debug=True)
 
     # 解析エラー時の処理は自前で行う
     if op.is_error:
         # print(op.get_errormessage(1), file=sys.stderr)
         print(op.get_errormessage(), file=sys.stderr)
+        print()
         print("オプション一覧", file=sys.stderr)
         tabprint(op.get_optionlist(), [22, 4], file=sys.stderr)
         exit(1)

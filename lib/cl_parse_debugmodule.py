@@ -4,6 +4,7 @@
 # -------------------------------------------------------------
 from typing import Union, List, Dict, Any
 import cl_parse as cl
+imported = True
 
 
 def show_templatex(op: cl.Parse, options: Union[List[str], Dict[str, cl.Opset]]):
