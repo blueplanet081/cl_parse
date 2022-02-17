@@ -42,17 +42,12 @@ CLIベースのコマンドを試作／製作するとき、起動オプショ�
 ------------------------------|----
 lib/cl_parse.py               | cl_parse本体（使うのに必要なのはこのファイルだけです）
 lib/cl_parse_debugmodule.py   | cl_parse用デバッグモジュール
----               |---
+----------------------------- |--------------------------------------------------------
 README.md         | このドキュメント
-cl_parse.md       | もう少し詳しい説明
+options.md        | コマンドラインの構成とか、言葉の定義とか
 sample01.py       | 一番シンプルなサンプル
 ptree.py          | miniparse使用サンプル。いわゆる treeコマンドの試作版です。
 e2_path.py        | ptree.pyが呼び出している自作ライブラリ（添付用簡易版）
-mp_sample02.py    | エラー時にユーザ側で処理するサンプル
-mp_sample03.py    | Usage:情報とか、ユーザ定義するサンプル
-mp_sample04.py    | 区切りモードのサンプル
-mp_sample04b.py   | 区切りながら最後まで解析するサンプル
-mp_sample04c.py   | 区切りながら、その都度リセットして最後まで解析するサンプル
 
 <br>
 
@@ -88,9 +83,11 @@ op = cl.Parse(args, options, debug=True)
 
 <br>
 
-  1. cl_parse を importする。
-  2. オプション情報を定義する。
-  3. 解析するコマンドライン、オプション情報で、*\<cl_parse\>.* **Parse()** を呼び出す。
+１．パーサー呼び出し手順
+
+  - cl_parse を importします。
+  - オプション情報を定義します。（上記、options）
+  - 解析するコマンドライン、オプション情報で、*\<cl_parse\>.* **Parse()** を呼び出します。
 
 <br>
 
@@ -108,10 +105,14 @@ if op.is_error:
 
 <br>
 
-  1. 解析エラー時には、 *\<option\>.* **is_error** が **True** になる。その後の動作はユーザープログラム側に任される。
-  2. 解析エラーの理由は、*\<option\>.* **get_errormessage()** で取得する。
-  3. 定義されたオプション情報の一覧を、*\<option\>.* **get_optionlist()** で取得できる。
-  4. *\<cl_parse\>.* **tabprint()** は、一覧表を表示するためのサービス関数。
+２．解析エラー時の処理
+
+  - 解析エラー時には、 *\<option\>.* **is_error** プロパティが **True** になります。  
+    その後の動作はユーザープログラム側に任されます。
+  - 解析エラーの理由は、*\<option\>.* **get_errormessage()** メソッドで取得できます。
+  - ここでオプション情報を表示したいときは、定義されたオプション情報の一覧を、*\<option\>.* **get_optionlist()** メソッドで取得することができます。
+  - 上記プログラム例で、 *\<cl_parse\>.* **tabprint()** は、一覧表を表示するためのサービス関数です。
+  - 通常は、ここでエラー終了します。
 
 <br>
 
@@ -128,13 +129,16 @@ if op.OPT_help.isEnable:       # 使い方を表示する
 
 <br>
 
-  1. オプションに -h、--help などが指定された場合の、オプション情報の定義やhelp情報の表示もユーザープログラム側に任される。
-  2. オプションが指定された時の判断（上記で *\<option\>.* **OPT_help.isEnable**）は、次項を参照。
-  3. オプション情報の一覧の取得や表示は、前項を参照。
+３．helpメッセージの表示
+
+  - helpオプション（-h、--help）の設定、helpオプションが指定された場合の helpメッセージの表示も、ユーザープログラム側で行います。
+  - helpオプションが指定された時の判断方法（上記で *\<option\>.* **OPT_help.isEnable**プロパティを使用）は、次項の記述を参照してください。
+  - オプション情報の一覧の取得や表示は、前項の記述を参照してください。
 
 <br>
 
 ---
+
 
 ```py
 # 解析結果
@@ -160,17 +164,85 @@ if op.OPT_date.isEnable:       # 対象日
 
 <br>
 
-  1. 定義したオプションが認識されると、属性 *\<option\>.* **OPT_\<オプション名\>** が設定される。
-  2. コマンドラインで該当のオプションが指定されると、*\<option\>.* **OPT_\<オプション名\>.isEnable** が **True**に設定される。（指定されないと、初期値 = **False**のまま）
-  3. オプション引数が指定されると、*\<option\>.* **OPT_\<オプション名\>.value** にその値が設定される。（オプションが指定されない場合、及びオプション引数が省略された場合は、初期値 = **None** のまま）
-  4. *\<option\>.* **OPT_\<オプション名\>.value** の型（type）は、オプション情報で定義されたものに対応する。
+４．指定されたオプション情報の取得
+
+  - 定義したオプションが認識されると、 *\<option\>.* **OPT_\<オプション名\>** 属性が設定されます。
+  - コマンドラインで該当のオプションが指定されると、*\<option\>.* **OPT_\<オプション名\>.isEnable** プロパティが **True**に設定されます。（指定されないと、初期値 = **False**のまま）
+  - オプション引数が指定されると、*\<option\>.* **OPT_\<オプション名\>.value** プロパティにその値が設定されます。（オプションが指定されない場合、及びオプション引数が省略された場合は、初期値 = **None** のまま）
+  - *\<option\>.* **OPT_\<オプション名\>.value** の型（type）は、オプション情報で定義されたものに対応します。
+
+<br>
+<br>
+
+---
 
 <br>
 
+## サンプルプログラム（超簡易版）
 
 
+```Python :sample01.py
+import sys
+from lib import cl_parse as cl
+
+
+args = sys.argv
+# 試験用コマンドライン
+if len(args) <= 1:
+    args = 'this.py -a ABC --name=私だ  --date 2021/10/3 # ---#'.split()
+
+options = [
+        ["help", "-h, --help", "使い方を表示する", None],
+        ["all", "-a, --all", "すべて出力"],
+        ["name", "-n, --name", "使用者名を指定する//<名前>", str],
+        ["count", "-c, --count", "数量を指定する//<数(整数)>", int],
+        ["date", "-d, --date", "対象日//<年/月/日>", cl.strptime('%Y/%m/%d')],
+]
+
+# cl_parse 呼び出し（解析実行）
+op = cl.Parse(args, options, debug=True)
+
+# 解析エラー時の処理は自前で行う
+if op.is_error:
+    print(op.get_errormessage(1), file=sys.stderr)
+    print()
+    print("オプション一覧", file=sys.stderr)
+    cl.tabprint(op.get_optionlist(), file=sys.stderr)
+    exit(1)
+
+# help情報の表示も自前
+if op.OPT_help.isEnable:       # 使い方を表示する
+    print("これは cl_parse のサンプルプログラムです。\n")
+    print("オプション一覧")
+    cl.tabprint(op.get_optionlist())
+    exit()
+
+# 解析結果
+if op.OPT_all.isEnable:        # すべて出力
+    print("オプション 'all' が指定されました。")
+
+if op.OPT_name.isEnable:       # 使用者名を指定する
+    print("オプション 'name' が指定されました。")
+    print(f'    {op.OPT_name.value=}')
+    print()
+
+if op.OPT_count.isEnable:       # 数量を指定する
+    print("オプション 'count' が指定されました。")
+    print(f'    {op.OPT_count.value=}')
+    print()
+
+if op.OPT_date.isEnable:       # 対象日
+    print("オプション 'date' が指定されました。")
+    print(f'    {op.OPT_date.value=}')
+    print()
 
 ```
+
+
+
+## **実行例**
+
+```text
 > python3 sample01.py -a --name=わたし --date=2022/2/14 -c 12
 オプション 'all' が指定されました。
 オプション 'name' が指定されました。
@@ -185,6 +257,13 @@ if op.OPT_date.isEnable:       # 対象日
 > 
 ```
 
+
+
+項目          | 型                   | 内容
+--------------|----------------------|---------
+第１項目      | str（文字列）        | オプション名
+第２項目      | str（文字列）        | オプション文字列（複数の場合は , で区切る）
+第３項目      | str（文字列）        | オプションのコメント
 
 
 ---
