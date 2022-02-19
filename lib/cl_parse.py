@@ -970,7 +970,7 @@ if __name__ == '__main__':
         # args = 'this.py -al BLUE|RED|GREEN ABC --display 1024x0X40 --exp -ar 0.5 --ext 0x4a4f'.split()
         # args = 'this.py -a --date 2020/1/1 ---#'.split()
         # args = 'this.py -h --ratio=2 ABC -?- --date=TOMORROW -r- --color=RED --ratio=3 -?- - ---#'.split()
-        args = 'this.py ---# -aaa  ABC --ratio -xabc --all --date=2022/1/31 -a- --extend --color=RED -a --ratio=3 --ratio=2.5 - '.split()
+        args = 'this.py --- -aaa  ABC --ratio -xabc --all --date=2022/1/31 -a- --extend --color=RED -a --ratio=3 --ratio=2.5 - '.split()
         # args = 'this.py -a -r-5.0x ---#2'.split()
         pass
 
