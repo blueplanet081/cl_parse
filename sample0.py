@@ -46,3 +46,7 @@ if op.OPT_size.isEnable:       # 表示サイズを指定する
     print("オプション 'size' が指定されました。")
     print(f'    {op.OPT_size.value=}')
     print()
+
+if len(op.params):
+    print("以下のコマンド引数が入力されました。")
+    print(op.params)

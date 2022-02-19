@@ -51,3 +51,7 @@ if op.OPT_date.isEnable:       # 対象日
     print("オプション 'date' が指定されました。")
     print(f'    {op.OPT_date.value=}')
     print()
+
+if len(op.params):
+    print("以下のコマンド引数が入力されました。")
+    print(op.params)
