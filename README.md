@@ -77,7 +77,7 @@ options = [
 
 # cl_parse 呼び出し（解析実行）
 args = sys.argv
-op = cl.Parse(args, options, debug=True)
+ps = cl.Parse(args, options, debug=True)
 ```
 
 <br>
@@ -94,11 +94,11 @@ op = cl.Parse(args, options, debug=True)
 
 ```py
 # 解析エラー時の処理は自前で行う
-if op.is_error:
-    print(op.get_errormessage(1), file=sys.stderr)
+if ps.is_error:
+    print(ps.get_errormessage(1), file=sys.stderr)
     print()
     print("オプション一覧", file=sys.stderr)
-    cl.tabprint(op.get_optionlist(), file=sys.stderr)
+    cl.tabprint(ps.get_optionlist(), file=sys.stderr)
     exit(1)
 ```
 
@@ -106,10 +106,10 @@ if op.is_error:
 
 ２．解析エラー時の処理
 
-  - 解析エラー時には、 *\<option\>.* **is_error** プロパティが **True** になります。  
+  - 解析エラー時には、 *\<Parse\>.* **is_error** プロパティが **True** になります。  
     その後の動作（エラーメッセージ等の表示とか、プログラムの停止とか）はユーザープログラム側に任されます。
-  - 解析エラーの理由は、*\<option\>.* **get_errormessage()** メソッドで取得できます。
-  - ここでオプション情報を表示したいときは、定義されたオプション情報の一覧を、*\<option\>.* **get_optionlist()** メソッドで取得することができます。
+  - 解析エラーの理由は、*\<Parse\>.* **get_errormessage()** メソッドで取得できます。
+  - ここでオプション情報を表示したいときは、定義されたオプション情報の一覧を、*\<Parse\>.* **get_optionlist()** メソッドで取得することができます。
   - 上記プログラム例で、 *\<cl_parse\>.* **tabprint()** は、一覧表を表示するためのサービス関数です。
   - 通常は、ここでエラー終了します。
 
@@ -119,10 +119,10 @@ if op.is_error:
 
 ```py
 # help情報の表示も自前
-if op.OPT_help.isEnable:       # 使い方を表示する
+if ps.OPT_help.isEnable:       # 使い方を表示する
     print("これは cl_parse のサンプルプログラムです。\n")
     print("オプション一覧")
-    cl.tabprint(op.get_optionlist())
+    cl.tabprint(ps.get_optionlist())
     exit()
 ```
 
@@ -131,7 +131,7 @@ if op.OPT_help.isEnable:       # 使い方を表示する
 ３．helpメッセージの表示
 
   - helpオプション（-h、--help）の設定、helpオプションが指定された場合の helpメッセージの表示も、ユーザープログラム側で行います。
-  - helpオプションが指定された時の判断方法（上記リスト中の *\<option\>.* **OPT_help.isEnable**プロパティを使用している部分）は、次項の記述を参照してください。
+  - helpオプションが指定された時の判断方法（上記リスト中の *\<Parse\>.* **OPT_help.isEnable**プロパティを使用している部分）は、次項の記述を参照してください。
   - オプション情報の一覧の取得や表示は、前項の記述を参照してください。
 
 <br>
@@ -141,27 +141,27 @@ if op.OPT_help.isEnable:       # 使い方を表示する
 
 ```py
 # 解析結果
-if op.OPT_all.isEnable:        # すべて出力
+if ps.OPT_all.isEnable:        # すべて出力
     print("オプション 'all' が指定されました。")
 
-if op.OPT_name.isEnable:       # 使用者名を指定する
+if ps.OPT_name.isEnable:       # 使用者名を指定する
     print("オプション 'name' が指定されました。")
-    print(f'    {op.OPT_name.value=}')
+    print(f'    {ps.OPT_name.value=}')
     print()
 
-if op.OPT_count.isEnable:       # 数量を指定する
+if ps.OPT_count.isEnable:       # 数量を指定する
     print("オプション 'count' が指定されました。")
-    print(f'    {op.OPT_count.value=}')
+    print(f'    {ps.OPT_count.value=}')
     print()
 
-if op.OPT_date.isEnable:       # 対象日
+if ps.OPT_date.isEnable:       # 対象日
     print("オプション 'date' が指定されました。")
-    print(f'    {op.OPT_date.value=}')
+    print(f'    {ps.OPT_date.value=}')
     print()
 
-if len(op.params):
+if len(ps.params):
     print("以下のコマンド引数が入力されました。")
-    print(op.params)
+    print(ps.params)
 ```
 
 
@@ -169,14 +169,14 @@ if len(op.params):
 
 ４．解析結果の取得
 
-  - 定義したオプションが認識されると、 *\<option\>.* **OPT_\<オプション名\>** 属性が設定されます。
-  - コマンドラインで該当のオプションが指定されると、*\<option\>.* **OPT_\<オプション名\>.isEnable** プロパティが **True**に設定されます。（指定されないと、初期値 = **False**のまま）
-  - オプション引数が指定されると、*\<option\>.* **OPT_\<オプション名\>.value** プロパティにその値が設定されます。（オプションが指定されない場合、及びオプション引数が省略された場合は、初期値 = **None** のまま）
-  - *\<option\>.* **OPT_\<オプション名\>.value** の型（type）は、オプション情報で定義されたものに対応します。  
+  - 定義したオプションが認識されると、 *\<Parse\>.* **OPT_\<オプション名\>** 属性が設定されます。
+  - コマンドラインで該当のオプションが指定されると、*\<Parse\>.* **OPT_\<オプション名\>.isEnable** プロパティが **True**に設定されます。（指定されないと、初期値 = **False**のまま）
+  - オプション引数が指定されると、*\<Parse\>.* **OPT_\<オプション名\>.value** プロパティにその値が設定されます。（オプションが指定されない場合、及びオプション引数が省略された場合は、初期値 = **None** のまま）
+  - *\<Parse\>.* **OPT_\<オプション名\>.value** の型（type）は、オプション情報で定義されたものに対応します。  
 
 <br>
 
-  - コマンド引数は、*\<option\>.* **params** プロパティに文字列のリストとして格納されます。
+  - コマンド引数は、*\<Parse\>.* **params** プロパティに文字列のリストとして格納されます。
   - パーサーの呼び出しで sys.argv を用いる場合、先頭のプログラム名もコマンド引数として格納されますので、不都合がある場合は sys.argv[1:] のように、プログラム名をとばして指定してください。
 
 
@@ -208,45 +208,45 @@ options = [
 ]
 
 # cl_parse 呼び出し（解析実行）
-op = cl.Parse(args, options, debug=True)
+ps = cl.Parse(args, options, emessage_header="@stem", debug=True)
 
 # 解析エラー時の処理は自前で行う
-if op.is_error:
-    print(op.get_errormessage(1), file=sys.stderr)
+if ps.is_error:
+    print(ps.get_errormessage(1), file=sys.stderr)
     print()
     print("オプション一覧", file=sys.stderr)
-    cl.tabprint(op.get_optionlist(), file=sys.stderr)
+    cl.tabprint(ps.get_optionlist(), file=sys.stderr)
     exit(1)
 
 # help情報の表示も自前
-if op.OPT_help.isEnable:       # 使い方を表示する
+if ps.OPT_help.isEnable:       # 使い方を表示する
     print("これは cl_parse のサンプルプログラムです。\n")
     print("オプション一覧")
-    cl.tabprint(op.get_optionlist())
+    cl.tabprint(ps.get_optionlist())
     exit()
 
 # 解析結果
-if op.OPT_all.isEnable:        # すべて出力
+if ps.OPT_all.isEnable:        # すべて出力
     print("オプション 'all' が指定されました。")
 
-if op.OPT_name.isEnable:       # 使用者名を指定する
+if ps.OPT_name.isEnable:       # 使用者名を指定する
     print("オプション 'name' が指定されました。")
-    print(f'    {op.OPT_name.value=}')
+    print(f'    {ps.OPT_name.value=}')
     print()
 
-if op.OPT_count.isEnable:       # 数量を指定する
+if ps.OPT_count.isEnable:       # 数量を指定する
     print("オプション 'count' が指定されました。")
-    print(f'    {op.OPT_count.value=}')
+    print(f'    {ps.OPT_count.value=}')
     print()
 
-if op.OPT_date.isEnable:       # 対象日
+if ps.OPT_date.isEnable:       # 対象日
     print("オプション 'date' が指定されました。")
-    print(f'    {op.OPT_date.value=}')
+    print(f'    {ps.OPT_date.value=}')
     print()
 
-if len(op.params):
+if len(ps.params):
     print("以下のコマンド引数が入力されました。")
-    print(op.params)
+    print(ps.params)
 
 ```
 
@@ -258,13 +258,13 @@ if len(op.params):
 > python3 sample01.py -a --name=わたし --date=2022/2/14 -c 12 ABC XYZ
 オプション 'all' が指定されました。
 オプション 'name' が指定されました。
-    op.OPT_name.value='わたし'
+    ps.OPT_name.value='わたし'
 
 オプション 'count' が指定されました。
-    op.OPT_count.value=12
+    ps.OPT_count.value=12
 
 オプション 'date' が指定されました。
-    op.OPT_date.value=datetime.datetime(2022, 2, 14, 0, 0)
+    ps.OPT_date.value=datetime.datetime(2022, 2, 14, 0, 0)
 
 以下のコマンド引数が入力されました。
 ['sample01.py', 'ABC', 'XYZ']

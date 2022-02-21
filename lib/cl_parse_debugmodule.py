@@ -7,37 +7,39 @@ import cl_parse as cl
 imported = True
 
 
-def show_templatex(op: cl.Parse, options: Union[List[str], Dict[str, cl.Opset]]):
+def show_templatex(ps: cl.Parse, options: Union[List[str], Dict[str, cl.Opset]]):
     """ テンプレートを表示する（デバッグ／ユーティリティ用） """
 
     def __show_one(stropt: str, objopt: Any):
-        print((f'if op.{stropt}.isEnable:').ljust(30), f"# {objopt.comment}")
+        print((f'if ps.{stropt}.isEnable:').ljust(30), f"# {objopt.comment}")
         if objopt.afunc:
-            print(f'    value = op.{stropt}.value')
+            print(f'    value = ps.{stropt}.value')
         elif "help" in objopt.l_options:
             print('    print("使用方法を書く")')
-            print('    # op.get_optionlist() 等を表示する')
+            print('    # ps.get_optionlist() 等を表示する')
             print('    exit()')
         else:
             print('    pass')
 
-    print('# please replace "op" to appropriate instance name.')
-    print('if op.is_error:')
-    print('    # op.get_errormessage() 等を表示する')
+    print('# please replace "ps" to appropriate instance name.')
+    print('if ps.is_error:')
+    print('    # ps.get_errormessage() 等を表示する')
     print('    exit(1)')
     if type(options) is list:
         for opt in options:
-            opx = getattr(op, opt)
+            opx = getattr(ps, opt)
             __show_one(opt, opx)
     elif type(options) is dict:
         for opt in options.keys():
-            __show_one(f'OPT_["{opt}"]', op.OPT_[opt])
+            __show_one(f'OPT_["{opt}"]', ps.OPT_[opt])
+    print()
+    print("print(f'{ps.params=}')         # コマンド引数")
 
 
-def show_definitionlist(op: cl.Parse) -> None:
+def show_definitionlist(ps: cl.Parse) -> None:
     """ オプション設定一覧を表示する（デバッグ／ユーティリティ用） """
-    for opt in op.option_attrs:
-        opx = getattr(op, opt)
+    for opt in ps.option_attrs:
+        opx = getattr(ps, opt)
         print(opt)
         print(f'    s_options = {opx.s_options}')
         print(f'    l_options = {opx.l_options}')
@@ -45,18 +47,18 @@ def show_definitionlist(op: cl.Parse) -> None:
         print(f'    afunc = {opx.afunc}')
         print(f'    atype = {opx.atype}')
     print()
-    if len(op._Parse__exclusive):
+    if len(ps._Parse__exclusive):
         print("exclusive =")
     else:
         print("exclusive = []")
-    for pair in op._Parse__exclusive:
+    for pair in ps._Parse__exclusive:
         print(f'    {pair}')
 
 
-def show_result(op: cl.Parse) -> None:
+def show_result(ps: cl.Parse) -> None:
     """ オプション解析結果一覧を表示する（デバッグ用） """
-    for opt in op.option_attrs:
-        opx = getattr(op, opt)
+    for opt in ps.option_attrs:
+        opx = getattr(ps, opt)
         strvalue = ""
         if opx.afunc or opx.atype:
             strvalue = str(opx.value)
@@ -79,20 +81,20 @@ def show_errormessage() -> None:
     print(cl.emsg)
 
 
-def show_debug(op: cl.Parse, __dmode: str):
+def show_debug(ps: cl.Parse, __dmode: str):
     """ デバッグ表示振り分け """
     if __dmode.startswith("##"):
         if __dmode == "##":
             print("オプション設定一覧")
-            show_definitionlist(op)
+            show_definitionlist(ps)
             exit()
         elif __dmode == "##1":
             print("テンプレート１")
-            show_templatex(op, op.option_attrs)
+            show_templatex(ps, ps.option_attrs)
             exit()
         elif __dmode == "##2":
             print("テンプレート２")
-            show_templatex(op, op._Parse__D_option)
+            show_templatex(ps, ps._Parse__D_option)
             exit()
         elif __dmode == "##e":
             print("エラーメッセージ一覧")
@@ -102,25 +104,25 @@ def show_debug(op: cl.Parse, __dmode: str):
     elif __dmode.startswith("#"):
         if __dmode in ["#", "#1"]:
             print("入力引数一覧")
-            for i, arg in enumerate(op._Parse__args):
+            for i, arg in enumerate(ps._Parse__args):
                 print(f"arg[{i}]: {arg}")
             print()
         if __dmode in ["#", "#2"]:
             print("オプション解析結果一覧")
-            show_result(op)
+            show_result(ps)
             print()
             print("コマンド引数一覧")
-            for i, param in enumerate(op.params):
+            for i, param in enumerate(ps.params):
                 print(f"arg[{i}]: {param}")
-            if op.remain:
+            if ps.remain:
                 print()
                 print("残りの入力引数一覧")
-                for i, param in enumerate(op.remain):
+                for i, param in enumerate(ps.remain):
                     print(f"arg[{i}]: {param}")
             print()
-            if op.is_error:
+            if ps.is_error:
                 print("解析エラーあり")
-                print(op.get_errormessage(2))
+                print(ps.get_errormessage(2))
             else:
                 print("解析エラーなし")
             print()

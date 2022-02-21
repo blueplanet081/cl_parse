@@ -311,7 +311,7 @@ emsg = {
 # -----------------------------------------------------
 # オプション引数のタイプ
 # -----------------------------------------------------
-class Ot(Flag):
+class At(Flag):
     NORMAL = 0
     OPTIONAL = auto()       # オプション引数省略可能
     APPEND = auto()         # オプション引数をリストに格納
@@ -319,9 +319,9 @@ class Ot(Flag):
 
 
 _OATYPE_SET = {
-        "OPTIONAL": Ot.OPTIONAL,
-        "APPEND": Ot.APPEND,
-        "COUNT": Ot.COUNT
+        "OPTIONAL": At.OPTIONAL,
+        "APPEND": At.APPEND,
+        "COUNT": At.COUNT
     }
 
 
@@ -382,7 +382,7 @@ def check_blocktype(blk: Optional[str], prefix: str) -> Bt:
 # -----------------------------------------------------
 class Opset:
     def __init__(self, l_options: List[str], s_options: List[str],
-                 comment: str, acomment: str, afunc: Any, atype: Ot) -> None:
+                 comment: str, acomment: str, afunc: Optional[List[Any]], atype: At) -> None:
         """ オプションセット格納用クラス """
         self.__l_options = l_options
         self.__s_options = s_options
@@ -411,11 +411,11 @@ class Opset:
         return self.__acomment
 
     @property
-    def afunc(self) -> Any:
+    def afunc(self) -> Optional[List[Any]]:
         return self.__afunc
 
     @property
-    def atype(self) -> Any:
+    def atype(self) -> At:
         return self.__atype
 
     @property
@@ -426,14 +426,14 @@ class Opset:
         self.__isEnable = isenable
 
     @property
-    def value(self) -> bool:
+    def value(self) -> Any:
         return self.__value
 
     def _set_value(self, value: Any):
         self.__value = value
 
     def _store_value(self, value: Any):
-        if Ot.APPEND in self.__atype:
+        if At.APPEND in self.__atype:
             if self.__value is None:
                 self.__value = []
             self.__value.append(value)
@@ -452,16 +452,16 @@ class Opset:
 class Parse:
     def __init__(self,
                  args: List[str],                   # 解析するコマンドライン
-                 options: List[List[Any]],
-                 exclusive: Union[List[List[str]], List[str]] = [],     # 排他リスト
+                 options: List[List[Any]],          # オプション情報
+                 exclusive: Union[List[List[str]], List[str]] = [],     # 排他オプションリスト
                  cancelable: bool = False,          # オプションキャンセル可能モード
                  smode: Smode = Smode.NONE,         # 解析モード
                  winexpand: bool = True,            # Windowsで、ワイルドカードを展開するかどうか
                  file_expand: bool = False,         # コマンド引数の @<filename> を展開するかどうか
-                 emessage_header: str = "@name",    # エラーメッセージの頭に付けるプログラム名
+                 emessage_header: str = "@name",    # エラーメッセージの頭に付けるコマンド名
                  comment_sp: str = '//',            # オプションコメントのセパレータ
-                 debug: bool = False,               # デバッグ指定（--@ で結果一覧出力）
-                 option_name_prefix: str = "OPT_",  # 自プログラム内でオプションを指定する時のprefix
+                 debug: bool = False,               # デバッグ機能を有効にする
+                 option_name_prefix: str = "OPT_",  # オプション属性を生成する時のprefix
                  option_string_prefix: str = "-",   # オプションの前に付ける - とか --
                  ) -> None:
         """ コマンドラインパーサー """
@@ -584,7 +584,7 @@ class Parse:
             ioacomment = "" if ioacomment is None else ioacomment
 
             # iopset[3] : オプション引数のタイプ（存在しなければ None）
-            iatype: Ot = Ot.NORMAL
+            iatype: At = At.NORMAL
             if iopset[3] is not None:
                 ioafunc: Optional[List[Any]] = []
                 if type(iopset[3]) not in [list, tuple]:
@@ -597,11 +597,11 @@ class Parse:
                     else:
                         ioafunc.append(item)
 
-                    assert Ot.COUNT == iatype or Ot.COUNT not in iatype, \
+                    assert At.COUNT == iatype or At.COUNT not in iatype, \
                         f'"COUNT" and other types are exclusive." [{iatype}] in {iopset}'
-                    assert Ot.COUNT not in iatype or not ioafunc, \
+                    assert At.COUNT not in iatype or not ioafunc, \
                         f'"COUNT" and other functions are exclusive." [{iatype}] in {iopset}'
-                if not ioafunc and Ot.COUNT not in iatype:
+                if not ioafunc and At.COUNT not in iatype:
                     ioafunc.append(str)
             else:
                 ioafunc = None
@@ -732,7 +732,7 @@ class Parse:
                     if __ops.afunc:     # オプション引数が必要 ---------
                         harg = arg  # for 'E12' error_reason
                         if oarg is None:                    # オプション引数無し（= 以降が無い）
-                            if Ot.OPTIONAL in __ops.atype:    # オプション引数省略可能
+                            if At.OPTIONAL in __ops.atype:    # オプション引数省略可能
                                 self.__store_value(__ops, None)
                                 continue
                             else:
@@ -754,7 +754,7 @@ class Parse:
                         if oarg is not None:                     # オプション引数が不要なのに引数あり
                             self.__set_error_reason('E13', arg=arg)
                             return
-                        if Ot.COUNT in __ops.atype:
+                        if At.COUNT in __ops.atype:
                             __ops._count_value(1)
 
                 else:           # ロング名オプションが正しくない ----
@@ -803,7 +803,7 @@ class Parse:
                             if not ret:                 # オプション引数格納（変換）エラー
                                 self.__set_error_reason('E22', opt=opt, arg=harg)
                                 return
-                        elif Ot.COUNT in __ops.atype:
+                        elif At.COUNT in __ops.atype:
                             __ops._count_value(1)
 
                     else:                           # 1文字オプションが正しくない ------
@@ -1016,47 +1016,47 @@ if __name__ == '__main__':
 
     Parse.show_errormessage()
     # cl_parse 呼び出し（解析実行）
-    op = Parse(args, options, exclusive=exclusive, cancelable=True, debug=True, emessage_header="@stem")
+    ps = Parse(args, options, exclusive=exclusive, cancelable=True, debug=True, emessage_header="@stem")
     # op = Parse(options, args, exclusive=exclusive, cancelable=True, debug=True)
 
     # 解析エラー時の処理は自前で行う
-    if op.is_error:
+    if ps.is_error:
         # print(op.get_errormessage(1), file=sys.stderr)
-        print(op.get_errormessage(), file=sys.stderr)
+        print(ps.get_errormessage(), file=sys.stderr)
         print()
         print("オプション一覧", file=sys.stderr)
-        tabprint(op.get_optionlist(), [22, 4], file=sys.stderr)
+        tabprint(ps.get_optionlist(), [22, 4], file=sys.stderr)
         exit(1)
 
     # help情報の表示も自前
-    if op.OPT_help.isEnable:
+    if ps.OPT_help.isEnable:
         print("使い方を表示する。")
-        tabprint(op.get_optionlist(), [22, 4])
+        tabprint(ps.get_optionlist(), [22, 4])
 
         exit()
 
     # ここから自分のプログラム
-    if op.OPT_all.isEnable:
+    if ps.OPT_all.isEnable:
         print("-a, --all : すべて出力、が指定されました。")
 
-    if op.OPT_["color"].isEnable:
-        print('OPT_["color"] is Enable,', f'value = {op.OPT_["color"].value}')
+    if ps.OPT_["color"].isEnable:
+        print('OPT_["color"] is Enable,', f'value = {ps.OPT_["color"].value}')
 
-    if op.OPT_size.isEnable:     # type: ignore
-        print(f"-s, --size : 表示サイズ、が指定されました。size={repr(op.OPT_size.value)}")     # type: ignore
+    if ps.OPT_size.isEnable:     # type: ignore
+        print(f"-s, --size : 表示サイズ、が指定されました。size={repr(ps.OPT_size.value)}")     # type: ignore
 
 
-    if op.OPT_ratio.isEnable:
-        print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={repr(op.OPT_ratio.value)}")
-        print(type(op.OPT_ratio.value))
+    if ps.OPT_ratio.isEnable:
+        print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={repr(ps.OPT_ratio.value)}")
+        print(type(ps.OPT_ratio.value))
 
-    if op.OPT_["OPT_ratio"].isEnable:
-        print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={repr(op.OPT_['OPT_ratio'].value)}")
+    if ps.OPT_["OPT_ratio"].isEnable:
+        print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={repr(ps.OPT_['OPT_ratio'].value)}")
 
-    if op.OPT_extend.isEnable:
+    if ps.OPT_extend.isEnable:
         print("-x, --extend : 特別な奴、が指定されました。")
 
-    if op.OPT_expect.isEnable:
+    if ps.OPT_expect.isEnable:
         print("-e, --expect : 紛らわしい奴、が指定されました。")
 
     # op.show_definitionlist()
