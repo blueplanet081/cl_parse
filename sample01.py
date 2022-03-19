@@ -1,5 +1,6 @@
 import sys
 from lib import cl_parse as cl
+from lib import cl_parse_functions as cf
 
 
 args = sys.argv
@@ -8,11 +9,12 @@ if len(args) <= 1:
     args = 'this.py -a ABC --name=私だ  --date 2021/10/3 # ---#'.split()
 
 options = [
+        ["#Usage: 使い方をここに書く"],
         ["help", "-h, --help", "使い方を表示する", None],
         ["all", "-a, --all", "すべて出力"],
         ["name", "-n, --name", "使用者名を指定する//<名前>", str],
         ["count", "-c, --count", "数量を指定する//<数(整数)>", int],
-        ["date", "-d, --date", "対象日//<年/月/日>", cl.strptime('%Y/%m/%d')],
+        ["date", "-d, --date", "対象日//<年/月/日>", cf.strptime('%Y/%m/%d')],
 ]
 
 # cl_parse 呼び出し（解析実行）
@@ -22,14 +24,12 @@ ps = cl.Parse(args, options, emessage_header="@stem", debug=True)
 if ps.is_error:
     print(ps.get_errormessage(1), file=sys.stderr)
     print()
-    print("オプション一覧", file=sys.stderr)
     cl.tabprint(ps.get_optionlist(), file=sys.stderr)
     exit(1)
 
 # help情報の表示も自前
 if ps.OPT_help.isEnable:       # 使い方を表示する
     print("これは cl_parse のサンプルプログラムです。\n")
-    print("オプション一覧")
     cl.tabprint(ps.get_optionlist())
     exit()
 

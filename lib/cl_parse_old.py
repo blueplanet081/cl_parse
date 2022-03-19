@@ -7,8 +7,8 @@ import glob
 import pathlib
 import platform
 from enum import Enum, EnumMeta, Flag, IntFlag, auto
-from typing import Any, Optional, TextIO, Tuple, List, Literal, Sequence, Union, Iterable
-from collections.abc import Iterator, Callable
+from typing import Any, Optional, TextIO
+from collections.abc import Iterator
 
 
 exist_debugmodule = False
@@ -397,24 +397,10 @@ class Opset:
 # -----------------------------------------------------
 # パーサー本体
 # -----------------------------------------------------
-TAction = Union[Optional[str],
-                Callable[..., Any],
-                Iterable[Union[str, Callable[..., Any]]]
-                ]
-
-TOptionset = Iterable[Union[str,
-                            Tuple[str],
-                            Tuple[str, str],
-                            Tuple[str, str, Optional[str]],
-                            Tuple[str, str, Optional[str], TAction],
-                            ]
-                      ]
-
-
 class Parse:
     def __init__(self,
                  args: list[str],                   # 解析するコマンドライン
-                 options: TOptionset,          # オプション情報
+                 options: list[list[Any]],          # オプション情報
                  exclusive: list[list[str]] | list[str] = [],   # 排他オプションリスト
                  cancelable: bool = False,          # オプションキャンセル可能モード
                  smode: Smode = Smode.NONE,         # 解析モード
@@ -486,7 +472,7 @@ class Parse:
     # -----------------------------------------------------
     # オプションセット読み込み処理
     # -----------------------------------------------------
-    def __set_options(self, options: TOptionset) -> None:
+    def __set_options(self, options: list[list[Any]]) -> None:
         """ オプションセットを読み込む """
         def is_optionstringS(text: str) -> bool:
             """ １文字オプション文字列・文字種チェック """
@@ -504,14 +490,13 @@ class Parse:
 
         for iopset in options:
             # コメント行格納処理
-            # if isinstance(iopset[0:1][0], str) and iopset[0:1][0].startswith("#"):
-            if iopset[0].startswith("#"):
-                self.__options_and_comments.append(iopset[0])
+            if isinstance(iopset[0:1][0], str) and iopset[0:1][0].startswith("#"):
+                self.__options_and_comments.append(iopset[0:1][0])
                 continue
 
-            iopset = (iopset + (None,) * (4 - len(iopset)))[0:4]
+            iopset = (iopset + [None] * (4 - len(iopset)))[0:4]
 
-            import keyword      # <- 何これ！？
+            import keyword
 
             # オプション名の処理 --------------------------------
             assert isinstance(iopset[0], str), \
@@ -949,19 +934,19 @@ if __name__ == '__main__':
 
     # cl_parse 呼び出し用のオプション定義
     options = [
-            ("#USAGE: なんてものを書いてみる\n "),
-            ("help", "-h, -? ,  --help", "使い方を表示する", None),
-            ("all", "-a, --all", "すべて出力", ("COUNT")),
+            ["#USAGE: なんてものを書いてみる\n "],
+            ["help", "-h, -? ,  --help", "使い方を表示する", None],
+            ["all", "-a, --all", "すべて出力", ("COUNT")],
             # ["date", "-d, --date", "対象日//<年/月/日>", (date, str_choices(["TODAY", "TOMORROW"]))],
-            ("# "),
-            ("date", "-d, --date", "対象日//<年/月/日>", cf.date),
-            ("color", "-c, --color, -l", "表示色//<color>", Color),
-            ("#     これは、いろいろなコメントです。\n   なんでしょうかね。"),
-            ("OPT_size", " --size, --display", "表示サイズを指定する//<縦x横>",
-                cf.sepalate_items(type=cf.int_literal, sep='x', count=2)),
-            ("OPT_ratio", "-r,--ratio", "比率を指定する//<比率>", ["OPTIONAL", int, float, str, "APPEND"]),
-            ("extend", "-x, --extend ", "特別な奴", "OPTIONAL"),
-            ("expect", "-e, --expect", "紛らわしい奴"),
+            ["# "],
+            ["date", "-d, --date", "対象日//<年/月/日>", cf.date],
+            ["color", "-c, --color, -l", "表示色//<color>", Color],
+            ["#     これは、いろいろなコメントです。\n   なんでしょうかね。"],
+            ["OPT_size", " --size, --display", "表示サイズを指定する//<縦x横>",
+                cf.sepalate_items(type=cf.int_literal, sep='x', count=2)],
+            ["OPT_ratio", "-r,--ratio", "比率を指定する//<比率>", ["OPTIONAL", int, float, str, "APPEND"]],
+            ["extend", "-x, --extend ", "特別な奴", "OPTIONAL"],
+            ["expect", "-e, --expect", "紛らわしい奴"],
     ]
 
     exclusive = [
