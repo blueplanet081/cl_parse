@@ -12,6 +12,6 @@ emsg = {
     "E22": "{eno}: illegal argument specified for option {opt} in {arg}",
     "E23": "{eno}: illegal option {opt} in {arg}",
     "E31": "{eno}: exclusive option between ({ext0}) and ({ext1})",
-    "E31x": "oputions ext0 and ext1 are mutually exclusive",
+    "E31x": "option ext0 and ext1 are mutually exclusive",
     "E99": "{eno}: unknown error opt={opt}, arg={arg}, ext0={ext0}, ext1={ext1}",
 }

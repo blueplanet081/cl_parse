@@ -1,17 +1,17 @@
 # -------------------------------------------------------------
-# cl_parse用デバッグ用モジュール                2022/2/5 by te.
+# cl_parse用デバッグ用モジュール               2022/3/23 by te.
 # （このモジュールが無ければ、デバッグ表示は無視されます）
 # -------------------------------------------------------------
-from typing import Union, List, Dict, Any
+from __future__ import annotations
+from typing import Any
 import cl_parse as cl
-imported = True
 
 
-def show_templatex(ps: cl.Parse, options: Union[List[str], Dict[str, cl.Opset]]):
+def show_templatex(ps: cl.Parse, options: list[str] | dict[str, cl.Opset]):
     """ テンプレートを表示する（デバッグ／ユーティリティ用） """
 
     def __show_one(stropt: str, objopt: Any):
-        print((f'if ps.{stropt}.isEnable:').ljust(30), f"# {objopt.comment}")
+        print((f'if ps.{stropt}.isEnable:').ljust(30), f"# {objopt.comment.splitlines()[0]}")
         if objopt.afunc:
             print(f'    value = ps.{stropt}.value')
         elif "help" in objopt.l_options:

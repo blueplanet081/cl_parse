@@ -10,11 +10,27 @@ ps = cl.Parse(args, options, exclusive=exclusive, cancelable=True, debug=True, e
 
 ### 定義
 ```py
+TAction = Union[Optional[str],
+                Callable[..., Any],
+                Iterable[Union[str, Callable[..., Any]]]
+                ]
+
+TOptionset = Union[str,
+                   tuple[str],
+                   tuple[str, str],
+                   tuple[str, str, Optional[str]],
+                   tuple[str, str, Optional[str], TAction],
+                   ]
+
+TExclusiveset = Union[Sequence[str],
+                      Sequence[Sequence[str]]
+                      ]
+
 class Parse:
     def __init__(self,
-                 args: List[str],                   # 解析するコマンドライン
-                 options: List[List[Any]],          # オプション情報
-                 exclusive: Union[List[List[str]], List[str]] = [],     # 排他オプションリスト
+                 args: list[str],                   # 解析するコマンドライン
+                 options: Iterable[TOptionset],     # オプション情報
+                 exclusive: TExclusiveset = [],     # 排他オプションリスト
                  cancelable: bool = False,          # オプションキャンセル可能モード
                  smode: Smode = Smode.NONE,         # 解析モード
                  winexpand: bool = True,            # Windowsで、ワイルドカードを展開するかどうか
@@ -29,20 +45,20 @@ class Parse:
 <br>
 
 ### 引数の一覧
-引数名     | 引数の型      | 省略時           | 内容
------------|---------------|------------------|------------------------------
-args       |List[str]      |省略不可          |解析するコマンドラインの文字列リスト
-options    |List[List[Any]]|省略不可          |オプション情報
-exclusive  |Union[List[List[str]], List[str]] |空リスト|排他オプションリスト
-cancelable |bool           |False             |オプションキャンセル可能モードを有効にする
-smode      |*\<cl_parse>.* Smode  |*\<cl_parse>.* Smode.NONE        |解析モードを指定する
-winexpand  |bool           |True              |Windowsで、ワイルドカードを展開するかどうか
-file_expand  |bool         |False             |コマンド引数の @\<filename> を展開するかどうか
-emessage_header|str        |"@name"           |エラーメッセージの頭に付けるコマンド名を指定する
-comment_sp |str            |'//'              |オプションコメントのセパレータ
-debug      |bool           |False             |デバッグ機能を有効にする（--- で機能一覧）
-option_name_prefix  |str   |"OPT_"            |オプション属性を生成する時のprefix
-option_string_prefix|str   |"-"               |オプションの前に付ける - とか -- を設定する
+引数名     | 引数の型           | 省略時           | 内容
+-----------|--------------------|------------------|------------------------------
+args       |List[str]           |省略不可          |解析するコマンドラインの文字列リスト
+options    |Iterable[TOptionset]|省略不可          |オプション情報
+exclusive  |TExclusiveset       |空リスト          |排他オプションリスト
+cancelable |bool                |False             |オプションキャンセル可能モードを有効にする
+smode      |*\<cl_parse>.* Smode |*\<cl_parse>.* Smode.NONE   |解析モードを指定する
+winexpand  |bool               |True               |Windowsで、ワイルドカードを展開するかどうか
+file_expand         |bool      |False              |コマンド引数の @\<filename> を展開するかどうか
+emessage_header     |str       |"@name"            |エラーメッセージの頭に付けるコマンド名を指定する
+comment_sp          |str       |'//'               |オプションコメントのセパレータ
+debug               |bool      |False              |デバッグ機能を有効にする（--- で機能一覧）
+option_name_prefix  |str       |"OPT_"             |オプション属性を生成する時のprefix
+option_string_prefix|str       |"-"                |オプションの前に付ける - とか -- を設定する
 
 <br>
 
@@ -52,11 +68,11 @@ option_string_prefix|str   |"-"               |オプションの前に付ける
       * 解析するコマンドラインが格納されている、文字列リストを指定する。
       * sys.argv を渡すと、先頭のプログラム名もコマンド引数として解釈する。不都合であれば、sys.argv[1:] を指定してください。
    - options
-      * オプション情報を格納したリストを指定する。
+      * オプション情報を格納したリスト（またはタプル）を指定する。
       * オプション情報の格納方法、内容の説明は別途。
    - exclusive
-      * 排他リスト(同時に指定してはいけないオプションのリスト）を指定する。
-      * 「任意の数の排他のオプション名のリスト」、またはそのリストが複数あれば、リストのリストで指定する。
+      * 排他リスト(同時に指定してはいけないオプションのリスト）（またはタプル）を指定する。
+      * 「任意の数の排他のオプション名のリスト」、またはそのリストが複数あれば、リストのリスト（またはタプル）で指定する。
       * 省略時は空リスト。（排他のオプションはない）
    - cancelable
       * コマンドライン上で、一度指定したオプションをキャンセルする機能を有効（True）にするかどうかを指定する。
@@ -110,4 +126,4 @@ option_string_prefix|str   |"-"               |オプションの前に付ける
    - option_string_prefix
       * コマンドライン上でオプションとして認識されるためのプリフィックス文字を指定する。
       * 省略時は "-" が指定され、-x が１文字オプション、--xxxxx がロング名オプションとして認識される。
-      * 例えば、プリフィックスはどうしても "/" を使いたい、と言う時に使えるけど、実際に使ってみたら気持ち悪かった。(\*_*)
+      * 例えば、プリフィックスはどうしても "/" を使いたい、と言う時に使えるけど、気持ち悪いからやらないほうが良いです。

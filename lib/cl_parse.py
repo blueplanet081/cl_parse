@@ -1,5 +1,5 @@
 # -------------------------------------------------------------
-# コマンドラインパーサー cl_parse改の途中       2022/2/2 by te.
+# コマンドラインパーサー cl_parse改の途中      2022/3/23 by te.
 # -------------------------------------------------------------
 from __future__ import annotations
 import sys
@@ -7,8 +7,8 @@ import glob
 import pathlib
 import platform
 from enum import Enum, EnumMeta, Flag, IntFlag, auto
-from typing import Any, Optional, TextIO, Tuple, List, Literal, Sequence, Union, Iterable
-from collections.abc import Iterator, Callable
+from typing import Any, Optional, TextIO, Sequence, Union
+from collections.abc import Iterator, Callable, Iterable
 
 
 exist_debugmodule = False
@@ -23,7 +23,6 @@ try:
 
 except ModuleNotFoundError:
     exist_debugmodule = False
-    # print("debugmoduleをインストールしていません")
 
 
 # -------------------------------------------------------------
@@ -64,7 +63,7 @@ def _tab_expand(line: list[str]) -> list[str]:
 
 def _linefolding_list(line: list[str]) -> list[list[str]]:
     ''' 改行コードを含む文字列リストを改行して、行数分の文字列リストのリストを返す '''
-    ls = [text.splitlines() for text in line]   # 改行して複数行リストにする
+    ls = [text.split('\n') for text in line]    # 改行して複数行リストにする
     lc = max([len(item) for item in ls])        # 最大行数を取得
     return [list(ll) for ll in zip(*[item + [""] * (lc - len(item)) for item in ls])]   # 正規化して転置
 
@@ -123,6 +122,30 @@ def count_prefix(text: str, prefix_char: str, max_count: int = 0) -> int:
     while next(iter_text, None) == prefix_char:
         count += 1
     return count
+
+
+class NamedTupleLike:
+    def __init__(self, values: tuple[Any, ...] | Any, attr_names: Sequence[str]) -> None:
+        ''' Tuple を NamedTuple みたいなものに変換する。注意！ attrは全部mutable。
+            足りないvalue は None、余った分は overflowに格納
+        '''
+        self.overflow: Any = None       # valuesのうち、余った分が入る
+        self.__attrs: list[str] = []    # 属性名のリスト
+        if isinstance(values, str) or not isinstance(values, Sequence):
+            values = (values, )
+        ivalue = iter(values)
+        for name in attr_names:
+            setattr(self, name, next(ivalue, None))
+            self.__attrs.append(name)
+
+        if len(values) > len(attr_names):
+            self.overflow = values[len(attr_names):]
+
+    def __str__(self) -> str:
+        strs: list[str] = []
+        for name in self.__attrs:
+            strs.append(name + "=" + str(getattr(self, name)))
+        return "\n".join(strs)
 
 
 # -------------------------------------------------------------
@@ -244,14 +267,14 @@ def cnv_enum(afunc: EnumMeta, ename: str) -> Any:
 emsg = {
     "N00": "no error",
     "E01": "{eno}: FileNotFoundError at {arg}",
-    "E11": "{eno}: missing argument for option {arg}",
-    "E12": "{eno}: illegal argument for option {arg}",
-    "E13": "{eno}: unnecessary argument for option {arg}",
+    "E11": "{eno}: argument required for option {arg}",
+    "E12": "{eno}: illegal argument specified for option {arg}",
+    "E13": "{eno}: unnecessary argument specified for option {arg}",
     "E14": "{eno}: illegal option {arg}",
-    "E21": "{eno}: missing argument for option {opt} in {arg}",
-    "E22": "{eno}: illegal argument for option {opt} in {arg}",
+    "E21": "{eno}: argument required for option {opt} in {arg}",
+    "E22": "{eno}: illegal argument specified for option {opt} in {arg}",
     "E23": "{eno}: illegal option {opt} in {arg}",
-    "E31": "{eno}: exclusive option between ({ext0}) and ({ext1})",
+    "E31": "{eno}: option ({ext0}) and ({ext1}) cannot be specified together",
     "E99": "{eno}: unknown error opt={opt}, arg={arg}, ext0={ext0}, ext1={ext1}",
 }
 
@@ -402,20 +425,23 @@ TAction = Union[Optional[str],
                 Iterable[Union[str, Callable[..., Any]]]
                 ]
 
-TOptionset = Iterable[Union[str,
-                            Tuple[str],
-                            Tuple[str, str],
-                            Tuple[str, str, Optional[str]],
-                            Tuple[str, str, Optional[str], TAction],
-                            ]
+TOptionset = Union[str,
+                   tuple[str],
+                   tuple[str, str],
+                   tuple[str, str, Optional[str]],
+                   tuple[str, str, Optional[str], TAction],
+                   ]
+
+TExclusiveset = Union[Sequence[str],
+                      Sequence[Sequence[str]]
                       ]
 
 
 class Parse:
     def __init__(self,
                  args: list[str],                   # 解析するコマンドライン
-                 options: TOptionset,          # オプション情報
-                 exclusive: list[list[str]] | list[str] = [],   # 排他オプションリスト
+                 options: Iterable[TOptionset],     # オプション情報
+                 exclusive: TExclusiveset = [],     # 排他オプションリスト
                  cancelable: bool = False,          # オプションキャンセル可能モード
                  smode: Smode = Smode.NONE,         # 解析モード
                  winexpand: bool = True,            # Windowsで、ワイルドカードを展開するかどうか
@@ -442,7 +468,7 @@ class Parse:
 
         self.__options: list[str] = []          # 設定されたオプション属性リスト
         self.__options_and_comments: list[str] = []          # 設定されたオプション属性リスト
-        self.__exclusive: list[list[str]] = []  # 読み込まれた排他リスト
+        self.__exclusive: list[set[str]] = []  # 読み込まれた排他リスト
         self.__ltoOPS: dict[str, str] = {}
         self.__stoOPS: dict[str, str] = {}
 
@@ -486,7 +512,7 @@ class Parse:
     # -----------------------------------------------------
     # オプションセット読み込み処理
     # -----------------------------------------------------
-    def __set_options(self, options: TOptionset) -> None:
+    def __set_options(self, options: Iterable[TOptionset]) -> None:
         """ オプションセットを読み込む """
         def is_optionstringS(text: str) -> bool:
             """ １文字オプション文字列・文字種チェック """
@@ -500,23 +526,22 @@ class Parse:
 
         def is_optionname(text: str) -> bool:
             """ オプション名・文字種チェック """
+            import keyword
             return text.isidentifier() and (not keyword.iskeyword(text))
 
         for iopset in options:
-            # コメント行格納処理
-            # if isinstance(iopset[0:1][0], str) and iopset[0:1][0].startswith("#"):
-            if iopset[0].startswith("#"):
-                self.__options_and_comments.append(iopset[0])
+            set = NamedTupleLike(iopset, ["opname", "opstrings", "comment", "actions"])
+
+            assert isinstance(set.opname, str), \
+                f'illegal type of option name(must be str) {set.opname} in {iopset}'
+
+            # コメント行格納処理 ===============================================
+            if set.opname.startswith("#"):
+                self.__options_and_comments.append(set.opname)
                 continue
 
-            iopset = (iopset + (None,) * (4 - len(iopset)))[0:4]
-
-            import keyword      # <- 何これ！？
-
-            # オプション名の処理 --------------------------------
-            assert isinstance(iopset[0], str), \
-                f'illegal type of option name(must be str) {iopset[0]} in {iopset}'
-            opt_name = iopset[0]
+            # オプション名の処理 ===============================================
+            opt_name = set.opname
             if not opt_name.startswith(self.__option_name_prefix):     # 頭に prefixが付いてなかったら
                 opt_name = self.__option_name_prefix + opt_name            # 頭に prefixを付加
 
@@ -527,14 +552,14 @@ class Parse:
             assert opt_name not in self.__options,\
                 f'duplicated option name [{opt_name}] in {iopset}'
 
-            # オプション文字列の処理 ----------------------------
-            assert isinstance(iopset[1], str), \
-                f'illegal type of option strings(must be str) {iopset[1]} in {iopset}'
+            # オプション文字列の処理 ===========================================
+            assert isinstance(set.opstrings, str), \
+                f'illegal type of option strings(must be str) {set.opstrings} in {iopset}'
             s_options: list[str] = []
             l_options: list[str] = []
 
             # 定義されたオプション文字列を個々に分割
-            option_strings = list(map(lambda x: x.strip(), iopset[1].split(',')))
+            option_strings = list(map(lambda x: x.strip(), set.opstrings.split(',')))
             # 一個ずつチェックして格納
             for s in option_strings:
                 count = count_prefix(s, self.__option_string_prefix, max_count=0)
@@ -548,19 +573,20 @@ class Parse:
                     assert False, \
                         f'illegal option string [{s}] in {iopset}'
 
-            # iopset[2] : コメント//オプション引数のコメント
-            assert isinstance(iopset[2], str), \
-                f'illegal type of "comment//option-argument comment" {iopset}'
-            icomment, ioacomment = split2(iopset[2], self.__commentsp)
+            # コメント//オプション引数のコメント
+            set.comment = set.comment if set.comment else ""    # Noneだったら空文字列
+            assert isinstance(set.comment, str), \
+                f'illegal type of "comment//option-argument comment" {set.comment} in {iopset}'
+            icomment, ioacomment = split2(set.comment, self.__commentsp)
             ioacomment = "" if ioacomment is None else ioacomment
 
-            # iopset[3] : オプション引数のタイプ（存在しなければ None）
+            # アクションタイプの処理 ===========================================
             iatype: At = At.NORMAL
-            if iopset[3] is not None:
+            if set.actions is not None:
                 ioafunc: Optional[list[Any]] = []
-                if type(iopset[3]) not in [list, tuple]:
-                    iopset[3] = [iopset[3]]
-                for item in iopset[3]:
+                if type(set.actions) not in [list, tuple]:
+                    set.actions = [set.actions]
+                for item in set.actions:
                     assert callable(item) or (item in _OATYPE_SET.keys()), \
                         f'illegal "option/ option argument type" [{item}] in {iopset}'
                     if item in _OATYPE_SET.keys():
@@ -577,7 +603,7 @@ class Parse:
             else:
                 ioafunc = None
 
-            # オプション属性を作成
+            # オプション属性を作成 =============================================
             setattr(self, opt_name,
                     Opset(l_options, s_options, icomment, ioacomment, ioafunc, iatype))
 
@@ -594,42 +620,44 @@ class Parse:
     # -----------------------------------------------------
     # 排他リスト読み込み処理
     # -----------------------------------------------------
-    def __set_exclusive(self, exsv: list[list[str]] | list[str]):
+    def __set_exclusive(self, exsv: TExclusiveset):
         """ 排他リスト読み込み処理 """
-        def is_pair_of_string(sample: list[list[str]] | list[str]) -> bool:
-            """ [str, str] じゃなかったら False """
-            if (type(sample) is list) and (len(sample) == 2) and \
-               (type(sample[0]) is str) and (type(sample[1]) is str):
-                return True
-            return False
-
         optionname_list = self.__D_option.keys()
+        if isinstance(exsv[0], str):
+            exsv = (exsv, )
+    
+        for exset in exsv:
+            wset: set[str] = set()
+            for p in exset:
+                assert isinstance(p, str), \
+                    f'incollect format in exclusive set {exset}'
+                assert p in optionname_list, \
+                    f'incollect option name "{p}" in exclusive set {exset}'
+                assert p not in wset, \
+                    f'option name "{p}" supecified twice in exclusive set {exset}'
+                wset.add(p)
 
-        if is_pair_of_string(exsv):
-            exsv = [exsv]
-
-        for p in exsv:
-            assert is_pair_of_string(p), \
-                f'incollect format in exclusive list {p}'
-            assert p[0] in optionname_list, \
-                f'incollect option name "{p[0]}" for ["{p[0]}", "{p[1]}"] in exclusive list'
-            assert p[1] in optionname_list, \
-                f'incollect option name "{p[1]}" for ["{p[0]}", "{p[1]}"] in exclusive list'
-            assert p[0] != p[1], \
-                f'can\'t specify same pair for ["{p[0]}", "{p[1]}"] in exclusive list'
-            self.__exclusive.append([p[0], p[1]])
+            self.__exclusive.append(wset)
+        return
 
     # -----------------------------------------------------
     # 排他チェック処理
     # -----------------------------------------------------
     def __exclusive_check(self) -> None:
-        """ 排他チェック処理 """
-        for p in self.__exclusive:
-            if self.OPT_[p[0]].isEnable and self.OPT_[p[1]].isEnable:
-                self.__set_error_reason('E31', ext0=self.make_options(self.OPT_[p[0]]),
-                                        ext1=self.make_options(self.OPT_[p[1]]))
-                self.__error = True
-                return
+        ''' 排他チェック処理
+            （オプションの排他セット中、二つ以上 Enableになったらエラー）
+        '''
+        for wset in self.__exclusive:
+            hotseat = ""
+            for p in wset:
+                if self.OPT_[p].isEnable:
+                    if hotseat:
+                        self.__set_error_reason(
+                            'E31', ext0=self.make_options(self.OPT_[hotseat]),
+                            ext1=self.make_options(self.OPT_[p]))
+                        self.__error = True
+                        return
+                    hotseat = p
 
     # -----------------------------------------------------
     # コマンドライン解析の本文
@@ -927,8 +955,8 @@ class Parse:
     def show_errormessage() -> None:
         """ 解析エラーメッセージ一覧を表示する（デバッグ用） """
         for eno in emsg:
-            print(Parse.__error_message(eno,
-                        arg="<ARG>", opt="<OPT>", ext0="<EXT0>", ext1="<EXT1>"))
+            print(Parse.__error_message(eno, arg="<ARG>", opt="<OPT>",
+                                        ext0="<EXT0>", ext1="<EXT1>"))
 
 
 # -------------------------------------------------------------------------------------
@@ -945,93 +973,64 @@ if __name__ == '__main__':
 
     args = sys.argv
     if len(args) <= 1:
-        args = 'this.py ---# -aaah  ABC --ratio -xabc --all --size=200x300 --date=2022/1/31 -a- --extend --color=RED --ratio=3 --ratio=2.5 - '.split()
+        # args = 'this.py ---# -? ABC --all --size=200x0X2F -c RED|GREEN'.split()
+        # args = 'this.py ---# ABC --all --size=200x0X2F --date=2022/1/31'.split()
+        args = 'this.py ---# ABC --all --size=200x0X2F -c RED|GREEN'.split()
 
     # cl_parse 呼び出し用のオプション定義
-    options = [
-            ("#USAGE: なんてものを書いてみる\n "),
+    options = (
+            ("#オプション一覧"),
             ("help", "-h, -? ,  --help", "使い方を表示する", None),
-            ("all", "-a, --all", "すべて出力", ("COUNT")),
-            # ["date", "-d, --date", "対象日//<年/月/日>", (date, str_choices(["TODAY", "TOMORROW"]))],
-            ("# "),
-            ("date", "-d, --date", "対象日//<年/月/日>", cf.date),
-            ("color", "-c, --color, -l", "表示色//<color>", Color),
-            ("#     これは、いろいろなコメントです。\n   なんでしょうかね。"),
-            ("OPT_size", " --size, --display", "表示サイズを指定する//<縦x横>",
+            ("all", "-a, --all", "すべて出力"),
+            ("date", "-d, --date", "作成日付（YYYY/MM/DD）//<日付>", cf.date),
+            ("color", "-c, --color", "表示色を指定する\n（RED,GREEN,BLUE,PURPLE,WHITE）//<color>",
+                Color),
+            ("#  ※「作成日付」と「表示色」オプションは同時に指定できません。\n"),
+            ("size", " --size, -s", "表示サイズを指定する//<縦x横>",
                 cf.sepalate_items(type=cf.int_literal, sep='x', count=2)),
-            ("OPT_ratio", "-r,--ratio", "比率を指定する//<比率>", ["OPTIONAL", int, float, str, "APPEND"]),
-            ("extend", "-x, --extend ", "特別な奴", "OPTIONAL"),
-            ("expect", "-e, --expect", "紛らわしい奴"),
-    ]
+    )
 
     exclusive = [
-        ["help", "all"],
-        # ["OPT_ratio", "all"],
-        ["extend", "all"],
+        ("date", "color"),
     ]
 
     newemsg = {
-        "N00": "no error",
-        "E01": "{eno}: FileNotFoundError at {arg}",
-        "E11": "{eno}: missing argument for option {arg}",
-        "E12": "{eno}: illegal argument for option {arg}",
-        "E13": "{eno}: unnecessary argument for option {arg}",
-        "E14": "{eno}: illegal option {arg}",
-        "E21": "{eno}: missing argument for option {opt} in {arg}",
-        "E22": "{eno}: illegal argument for option {opt} in {arg}",
-        "E23": "{eno}: illegal option {opt} in {arg}",
-        "E31": ": オプション ({ext0}) と ({ext1}) は同時に指定できませんよね。",
-        "E99": "{eno}: unknown error opt={opt}, arg={arg}, ext0={ext0}, ext1={ext1}",
+        "E31": ": オプション ({ext0}) と ({ext1}) は同時に指定できません。",
     }
 
-    # emsg["E31"] = ": オプション ({ext0}) と ({ext1}) は同時に指定できませんよ。"
-
-    # emsg.update({"E31": ": オプション ({ext0}) と ({ext1}) は同時に指定できませんよ。"})
     emsg.update(newemsg)
+    # Parse.show_errormessage()
 
-    Parse.show_errormessage()
     # cl_parse 呼び出し（解析実行）
     ps = Parse(args, options, exclusive=exclusive, cancelable=True, debug=True, emessage_header="@stem")
-    # op = Parse(options, args, exclusive=exclusive, cancelable=True, debug=True)
 
-    # 解析エラー時の処理は自前で行う
     if ps.is_error:
-        # print(op.get_errormessage(1), file=sys.stderr)
-        print(ps.get_errormessage(), file=sys.stderr)
-        print()
-        print("オプション一覧", file=sys.stderr)
-        tabprint(ps.get_optionlist(), [22, 4], file=sys.stderr)
+        # ps.get_errormessage() 等を表示する
+        print(ps.get_errormessage(1), file=sys.stderr)
+        print(file=sys.stderr)
+        tabprint(ps.get_optionlist(), [16, 4], file=sys.stderr)
         exit(1)
 
-    # help情報の表示も自前
-    if ps.OPT_help.isEnable:
-        print("使い方を表示する。")
-        tabprint(ps.get_optionlist(), [22, 4])
-
+    if ps.OPT_help.isEnable:       # 使い方を表示する
+        # ps.get_optionlist() 等を表示する
+        print("USAGE: cl_parse [option] ... [-d date | -c color] とかなんとか\n")
+        tabprint(ps.get_optionlist(), [16, 4])
         exit()
 
-    # ここから自分のプログラム
-    if ps.OPT_all.isEnable:
-        print("-a, --all : すべて出力、が指定されました。")
+    # ここからユーザープログラム
 
-    if ps.OPT_["color"].isEnable:
-        print('OPT_["color"] is Enable,', f'value = {ps.OPT_["color"].value}')
+    if ps.OPT_all.isEnable:        # すべて出力
+        print("「すべて出力」が指定されました。")
+        pass
+    if ps.OPT_date.isEnable:       # 作成日付（YYYY/MM/DD）
+        value = ps.OPT_date.value
+        print(f"「作成日付（{value=}）」が指定されました。")
+    if ps.OPT_color.isEnable:      # 表示色を指定する
+        value = ps.OPT_color.value
+        print(f"「表示色を指定する（{value=}）」が指定されました。")
+    if ps.OPT_size.isEnable:       # 表示サイズを指定する
+        value = ps.OPT_size.value
+        print(f"「表示サイズを指定する（{value=}）」が指定されました。")
 
-    if ps.OPT_size.isEnable:     # type: ignore
-        print(f"-s, --size : 表示サイズ、が指定されました。size={repr(ps.OPT_size.value)}")     # type: ignore
-
-
-    if ps.OPT_ratio.isEnable:
-        print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={repr(ps.OPT_ratio.value)}")
-        print(type(ps.OPT_ratio.value))
-
-    if ps.OPT_["OPT_ratio"].isEnable:
-        print(f"-r, --ratio : 比率を指定する、が指定されました。ratio={repr(ps.OPT_['OPT_ratio'].value)}")
-
-    if ps.OPT_extend.isEnable:
-        print("-x, --extend : 特別な奴、が指定されました。")
-
-    if ps.OPT_expect.isEnable:
-        print("-e, --expect : 紛らわしい奴、が指定されました。")
-
-    # op.show_definitionlist()
+    print(f'{ps.params=}')         # コマンド引数
+    

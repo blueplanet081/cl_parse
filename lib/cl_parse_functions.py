@@ -1,5 +1,5 @@
 # -------------------------------------------------------------
-# コマンドラインパーサー cl_parse用変換関数     2022/2/2 by te.
+# コマンドラインパーサー cl_parse用変換関数    2022/3/22 by te.
 # -------------------------------------------------------------
 from __future__ import annotations
 from typing import Any, Optional
@@ -55,7 +55,7 @@ class Mu2:
 # -----------------------------------------------------
 def sepalate_items__(
         moto: str, type: Optional[Callable[[str], Any]] = None,
-        sep: str = ',', count: int = 0) -> List[Any]:
+        sep: str = ',', count: int = 0) -> list[Any]:
     """ オプション引数をセパレータ(sep)で指定個数(count)に分割して解釈する。
         エラー時の処理が cl_parse 用
     """
@@ -72,7 +72,7 @@ sepalate_items = Mu2(Mu, sepalate_items__)
 # sepalate_items(type=int_literal, sep='x', count=2) みたいな使い方をする
 
 
-def str_choices__(arg: str, choices: List[str]) -> str:
+def str_choices__(arg: str, choices: list[str]) -> str:
     """ オプション引数が選択肢()内にあるかどうか判定する。
         エラー時の処理が cl_parse 用
     """
