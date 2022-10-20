@@ -1,3 +1,7 @@
+"""
+## コマンドラインパーサー cl_parse改の途中      2022/3/23 by te.
+"""
+
 # -------------------------------------------------------------
 # コマンドラインパーサー cl_parse改の途中      2022/3/23 by te.
 # -------------------------------------------------------------
@@ -291,8 +295,8 @@ class At(Flag):
 
 _OATYPE_SET = {
         "OPTIONAL": At.OPTIONAL,
-        "APPEND": At.APPEND,
-        "COUNT": At.COUNT
+        "APPEND":   At.APPEND,
+        "COUNT":    At.COUNT
     }
 
 
@@ -438,6 +442,7 @@ TExclusiveset = Union[Sequence[str],
 
 
 class Parse:
+    """Parseのドキュメント"""
     def __init__(self,
                  args: list[str],                   # 解析するコマンドライン
                  options: Iterable[TOptionset],     # オプション情報
@@ -486,7 +491,8 @@ class Parse:
         # オプションセット読み込み処理実行
         self.__set_options(options)
         # 排他リスト読み込み処理を実行
-        self.__set_exclusive(exclusive)
+        if exclusive:
+            self.__set_exclusive(exclusive)
 
         self.__s_options = list(self.__stoOPS.keys())     # 1文字オプション一覧
         self.__l_options = list(self.__ltoOPS.keys())     # ロング名オプション一覧
