@@ -10,12 +10,6 @@ from lib import cl_parse_old as cl
 import e2_path as e2
 
 
-tMoji = 0                   # tree表記に使う文字種類  0: ASCII記号、1:拡張文字
-dispFiles: bool = True      # ファイル情報を表示するかどうか
-dispAll: bool = False       # すべてのファイル／ディレクトリを表示するかどうか
-dispTreeLevel = 0           # 表示するツリーの深さ（0 は無制限）
-
-
 def show_directory(path: pathlib.Path, tlist: List[int] = []):
     ''' ディレクトリ以下の情報を再帰的に表示する。
         tlistは、ディレクトリ深度を表示するためのリスト
@@ -84,31 +78,30 @@ def show_directory(path: pathlib.Path, tlist: List[int] = []):
 ''' ここからメイン ---------------------------- '''
 
 options = [
-        ['a', "all", 'ドットやシステムディレクトリも表示'],
-        ['L', "level", '表示するディレクトリの深さを指定する//<深さ>', int],
-        ['d', "directory-only", 'ディレクトリのみ表示'],
-        ['e', "extra-char", 'ツリーの表示に拡張文字を使用'],
-        ['h', "help", '使い方を表示する'],
+        ["all", "-a, --all", 'ドットやシステムディレクトリも表示'],
+        ["level", "-L, --level", '表示するディレクトリの深さを指定する//<深さ>', int],
+        ["directoryonly", "-d, --directory-only", 'ディレクトリのみ表示'],
+        ["extrachar", "-e, --extra-char", 'ツリーの表示に拡張文字を使用'],
+        ["help", "-h, --help", '使い方を表示する'],
 ]
 
-op = cl.Parse(options, sys.argv[1:], debug=True)
+ps = cl.Parse(sys.argv[1:], options,  debug=True)
 
 # オプションエラー処理
-if op.is_error:
-    print(op.get_errormessage(1), file=sys.stderr)
+if ps.is_error:
+    print(ps.get_errormessage(1), file=sys.stderr)
     print("オプション一覧", file=sys.stderr)
-    op.show_optionslist(file=sys.stderr)
+    cl.tabprint(ps.get_optionlist(), [18, 4], file=sys.stderr)
     exit(1)
 
-# 使い方を表示
-if op.isEnable('help'):
+if ps.OPT_["help"].isEnable:            # 使い方を表示する
     print('ディレクトリやファイルのツリーを表示します。')
     print()
-    print("usage: ptree [-ade][-L <int>] | [-h]  [開始ディレクトリ]" )
-    op.show_optionslist()
+    print("usage: ptree [-ade][-L <int>] | [-h]  [開始ディレクトリ]")
+    cl.tabprint(ps.get_optionlist(), [18, 4], file=sys.stderr)
     exit()
 
-args = op.params
+args = ps.params
 if args:
     path = pathlib.Path(args[0])
     if not path.is_dir():
@@ -118,24 +111,21 @@ if args:
 else:
     path = pathlib.Path('.')
 
-# dispFiles = True
-# dispAll = False
-# dispTreeLevel = 0
+tMoji = 0                   # tree表記に使う文字種類  0: ASCII記号、1:拡張文字
+dispFiles: bool = True      # ファイル情報を表示するかどうか
+dispAll: bool = False       # すべてのファイル／ディレクトリを表示するかどうか
+dispTreeLevel = 0           # 表示するツリーの深さ（0 は無制限）
 
-# 隠しファイル／ディレクトリも表示する
-if op.isEnable('all'):
+if ps.OPT_["all"].isEnable:             # ドットやシステムディレクトリも表示
     dispAll = True
 
-# ディレクトリのみを表示
-if op.isEnable('directory-only'):
+if ps.OPT_["directoryonly"].isEnable:   # ディレクトリのみ表示
     dispFiles = False
 
-# ツリーの表示に拡張文字を使用する
-if op.isEnable('extra-char'):
+if ps.OPT_["extrachar"].isEnable:       # ツリーの表示に拡張文字を使用
     tMoji = 1
 
-# 表示するディレクトリの深さを指定する
-if op.isEnable('level'):
-    dispTreeLevel = op.value('level')
+if ps.OPT_["level"].isEnable:           # 表示するディレクトリの深さを指定する
+    dispTreeLevel = ps.OPT_["level"].value
 
 show_directory(path.resolve())
