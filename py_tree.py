@@ -50,11 +50,11 @@ class Options():
 
 class Footprint(NamedTuple):
     ''' iter_walk2の戻り値用「足跡」 '''
-    path: Path      # ディレクトリパス
-    remain: int     # 親ディレクトリ内の、残りのディレクトリの数
-    contain: int    # 子ディレクトリの数
+    path: Path          # ディレクトリパス
+    remain: int         # 親ディレクトリ内の、残りのディレクトリの数
+    contain: int        # 子ディレクトリの数
     files: List[Path]   # ディレクトリ内の、検出したファイル(Path)のリスト
-    result: str     # 空文字列: 正常、'p': 権限なし、'i': 展開しない
+    result: str         # 空文字列: 正常、'p': 権限なし、'i': 展開しない
 
 
 def select_files(p: Path, wild: str) -> List[Path]:
@@ -76,11 +76,7 @@ def subtract_files(files: List[Path], wild: str) -> List[Path]:
         return [p for p in files if not fnmatch(p.name, wild)]
     return files
 
-# def subtract_Path(list1: List[Path], list2: List[Path]) -> List[Path]:
-#     return [p for p in list1 if p not in list2]
 
-
-# def iter_walk2(p: Path, inhibits: List[Callable[[str], bool]] = []) -> Iterable[Footprint]:
 def iter_walk2(p: Path, op: Options) -> Iterable[Footprint]:
     ''' 指定された先頭のディレクトリ配下にあるディレクトリを walkして返すイテレータ
         p: 先頭のディレクトリ
@@ -104,6 +100,7 @@ def iter_walk2(p: Path, op: Options) -> Iterable[Footprint]:
                 return [], 'p'              # 権限エラー
         return [], 'i'  # 展開しなかった
 
+    # -------------------------------------------------------------------------------------
     files: List[Path] = []
 
     dirstack = S_Stack()            # ディレクトリ一覧のスタック
@@ -134,6 +131,7 @@ def iter_walk2(p: Path, op: Options) -> Iterable[Footprint]:
 
 
 def edit_filelist(files: List[Path], ) -> List[str]:
+    ''' ファイル(Path)のリストから、表示用のファイル情報の一覧を作成する '''
     ret: List[str] = []
     # files = [f for f in p.iterdir() if f.is_file()]
     if files:
@@ -209,18 +207,13 @@ def print_tree(head: Path, t_op: Options = Options()):
         d_level = len(node.path.parents) - d_base                   # headからのnode階層
 
         dirname = make_pathname(node.path, head, t_op.pathtype)       # 表示するディレクトリ名
+        mark = "[*]" if node.result == 'i' else "[e]" if node.result == 'p' else ""
 
         tlist = tlist[:d_level] + ([1] if node.remain else [0])     # treeの縦線フラグリスト
-        print(header0(tlist[1:], node.remain) + dirname, node.result)
+        print(header0(tlist[1:], node.remain) + dirname, mark)
 
         headern = header1(tlist[1:], node.contain)
 
-        # print(headern + f'directries={t.contain}')
-
-        # workfiles = select_files(node.path, t_op.wild)
-        # workfiles = subtract_files(workfiles, t_op.unmatch)
-        # workfiles2 = select_files(node.path, op.unmatch)
-        # workfiles = subtract_Path(workfiles, workfiles2)
         for s in edit_filelist(node.files):
             print(headern + "  " + s)
         print(headern)
@@ -238,12 +231,9 @@ if __name__ == "__main__":
     option.ascii = False
     option.pathtype = Ps.RELATIVE
     option.inhibits = inhibits
-    # option.wild = 'cl*.py*'
     option.wild = ''
     option.unmatch = ''
 
-        
     # p = Path(r'C:\Users\bluep\myproject\code39b\tk')
     p = Path(r'C:\Users\bluep\myproject\code39')
-    # p = Path(r'C:\Users\bluep\myproject')
     print_tree(p, option)
