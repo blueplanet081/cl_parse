@@ -986,7 +986,7 @@ if __name__ == '__main__':
         args = 'this.py ---# ABC --all --size=200x0X2F -c RED|GREEN'.split()
 
     # cl_parse 呼び出し用のオプション定義
-    options = (
+    options: TOptions = (
             ("#オプション一覧"),
             ("help", "-h, -? ,  --help", "使い方を表示する", None),
             ("all", "-a, --all", "すべて出力"),
