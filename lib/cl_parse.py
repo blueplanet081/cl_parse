@@ -436,6 +436,8 @@ TOptionset = Union[str,
                    tuple[str, str, Optional[str], TAction],
                    ]
 
+TOptions = Iterable[TOptionset]
+
 TExclusiveset = Union[Sequence[str],
                       Sequence[Sequence[str]]
                       ]
@@ -445,7 +447,7 @@ class Parse:
     """Parseのドキュメント"""
     def __init__(self,
                  args: list[str],                   # 解析するコマンドライン
-                 options: Iterable[TOptionset],     # オプション情報
+                 options: TOptions,                 # オプション情報
                  exclusive: TExclusiveset = [],     # 排他オプションリスト
                  cancelable: bool = False,          # オプションキャンセル可能モード
                  smode: Smode = Smode.NONE,         # 解析モード
@@ -518,7 +520,7 @@ class Parse:
     # -----------------------------------------------------
     # オプションセット読み込み処理
     # -----------------------------------------------------
-    def __set_options(self, options: Iterable[TOptionset]) -> None:
+    def __set_options(self, options: TOptions) -> None:
         """ オプションセットを読み込む """
         def is_optionstringS(text: str) -> bool:
             """ １文字オプション文字列・文字種チェック """
