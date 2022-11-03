@@ -690,9 +690,6 @@ class Parse:
                 self.__set_error_reason('E01', str(e))
                 return
 
-        if isWin and self.__winexpand:  # Windows用、ワイルドカード展開
-            self.__args = _wArgs(self.__args)
-
         # ここから解析本文
         b_args = iter(self.__args)      # コマンドライン（文字列のリスト）をイテレータに
         for arg in b_args:
@@ -831,10 +828,15 @@ class Parse:
 
         else:   # ループ終了
             self.__error = False
+            if isWin and self.__winexpand:  # Windows用、ワイルドカード展開
+                self.__params = _wArgs(self.__params)
+
             return
 
         # 途中終了
         self.__remain = [arg] + [_arg for _arg in b_args]       # 残りのコマンドラインを格納
+        if isWin and self.__winexpand:  # Windows用、ワイルドカード展開
+            self.__params = _wArgs(self.__params)
         self.__error = False
         return
 
