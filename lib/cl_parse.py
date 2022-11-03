@@ -69,7 +69,8 @@ def _linefolding_list(line: list[str]) -> list[list[str]]:
     ''' 改行コードを含む文字列リストを改行して、行数分の文字列リストのリストを返す '''
     ls = [text.split('\n') for text in line]    # 改行して複数行リストにする
     lc = max([len(item) for item in ls])        # 最大行数を取得
-    return [list(ll) for ll in zip(*[item + [""] * (lc - len(item)) for item in ls])]   # 正規化して転置
+    # 正規化して転置
+    return [list(ll) for ll in zip(*[item + [""] * (lc - len(item)) for item in ls])]
 
 
 def _tablist(line: list[str], tablist: list[int]) -> list[int]:
@@ -565,6 +566,7 @@ class Parse:
                 f'illegal type of option strings(must be str) {set.opstrings} in {iopset}'
             s_options: list[str] = []
             l_options: list[str] = []
+            ioacomment: str = ""
 
             # 定義されたオプション文字列を個々に分割
             option_strings = list(map(lambda x: x.strip(), set.opstrings.split(',')))
@@ -577,16 +579,15 @@ class Parse:
                 elif count == 2:    # ロング名オプション
                     assert is_optionstringL(s[2:]), f'illegal option string [{s}] in {iopset}'
                     l_options.append(s[2:])
-                else:
-                    assert False, \
-                        f'illegal option string [{s}] in {iopset}'
+                else:               # オプション引数のコメント
+                    ioacomment = s
+                    # assert False, \
+                    #     f'illegal option string [{s}] in {iopset}'
 
-            # コメント//オプション引数のコメント
-            set.comment = set.comment if set.comment else ""    # Noneだったら空文字列
-            assert isinstance(set.comment, str), \
-                f'illegal type of "comment//option-argument comment" {set.comment} in {iopset}'
-            icomment, ioacomment = split2(set.comment, self.__commentsp)
-            ioacomment = "" if ioacomment is None else ioacomment
+            # コメント
+            icomment = "" if set.comment is None else set.comment   # Noneだったら空文字列
+            assert isinstance(icomment, str), \
+                f'illegal type of "comment" (must be str or None){icomment} in {iopset}'
 
             # アクションタイプの処理 ===========================================
             iatype: At = At.NORMAL
@@ -985,18 +986,19 @@ if __name__ == '__main__':
     if len(args) <= 1:
         # args = 'this.py ---# -? ABC --all --size=200x0X2F -c RED|GREEN'.split()
         # args = 'this.py ---# ABC --all --size=200x0X2F --date=2022/1/31'.split()
-        args = 'this.py ---# ABC --all --size=200x0X2F -c RED|GREEN'.split()
+        args = 'this.py ---# ABC --all --size=200x0X2F -c RED|GREEN -h'.split()
 
     # cl_parse 呼び出し用のオプション定義
     options: TOptions = (
             ("#オプション一覧"),
             ("help", "-h, -? ,  --help", "使い方を表示する", None),
-            ("all", "-a, --all", "すべて出力"),
-            ("date", "-d, --date", "作成日付（YYYY/MM/DD）//<日付>", cf.date),
-            ("color", "-c, --color", "表示色を指定する\n（RED,GREEN,BLUE,PURPLE,WHITE）//<color>",
+            # ("all", "-a, --all", "すべて出力"),
+            ("all", "-a, --all", int),
+            ("date", "-d, --date, <日付>", "作成日付（YYYY/MM/DD）", cf.date),
+            ("color", "-c, --color, <color>", "表示色を指定する\n（RED,GREEN,BLUE,PURPLE,WHITE）",
                 Color),
             ("#  ※「作成日付」と「表示色」オプションは同時に指定できません。\n"),
-            ("size", " --size, -s", "表示サイズを指定する//<縦x横>",
+            ("size", " --size, -s, <縦x横>", "表示サイズを指定する",
                 cf.sepalate_items(type=cf.int_literal, sep='x', count=2)),
     )
 
@@ -1012,7 +1014,8 @@ if __name__ == '__main__':
     # Parse.show_errormessage()
 
     # cl_parse 呼び出し（解析実行）
-    ps = Parse(args, options, exclusive=exclusive, cancelable=True, debug=True, emessage_header="@stem")
+    ps = Parse(args, options, exclusive=exclusive, cancelable=True, debug=True,
+               emessage_header="@stem")
 
     if ps.is_error:
         # ps.get_errormessage() 等を表示する
@@ -1043,4 +1046,3 @@ if __name__ == '__main__':
         print(f"「表示サイズを指定する（{value=}）」が指定されました。")
 
     print(f'{ps.params=}')         # コマンド引数
-    
