@@ -6,14 +6,14 @@
 # コマンドラインパーサー cl_parse改の途中      2022/3/23 by te.
 # -------------------------------------------------------------
 from __future__ import annotations
-import sys
+
 import glob
 import pathlib
 import platform
+import sys
+from collections.abc import Callable, Iterable, Iterator
 from enum import Enum, EnumMeta, Flag, IntFlag, auto
-from typing import Any, Optional, TextIO, Sequence, Union
-from collections.abc import Iterator, Callable, Iterable
-
+from typing import Any, Optional, Sequence, TextIO, Union
 
 exist_debugmodule = False
 # -------------------------------------------------------------
@@ -34,6 +34,8 @@ except ModuleNotFoundError:
 # tabplintが不要なら、両方削ってください。
 # -------------------------------------------------------------
 import unicodedata
+
+
 class Wstr(str):
     def width(self) -> int:
         """ 日本語混じり文字列の表示幅を取得する """
@@ -973,6 +975,7 @@ class Parse:
 # -------------------------------------------------------------------------------------
 if __name__ == '__main__':
     import sys
+
     import cl_parse_functions as cf
 
     class Color(IntFlag):
@@ -992,8 +995,8 @@ if __name__ == '__main__':
     options: TOptions = (
             ("#オプション一覧"),
             ("help", "-h, -? ,  --help", "使い方を表示する", None),
-            # ("all", "-a, --all", "すべて出力"),
-            ("all", "-a, --all", int),
+            ("all", "-a, --all", "すべて出力"),
+            # ("all", "-a, --all", int),
             ("date", "-d, --date, <日付>", "作成日付（YYYY/MM/DD）", cf.date),
             ("color", "-c, --color, <color>", "表示色を指定する\n（RED,GREEN,BLUE,PURPLE,WHITE）",
                 Color),
