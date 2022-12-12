@@ -2,6 +2,7 @@ import sys
 from enum import Flag, auto
 
 from lib import cl_parse as cl
+from lib import cl_parse_functions as cf
 from datetime import datetime as dt
 
 # import functools
@@ -39,16 +40,16 @@ class Color(Flag):
 options = [
         # ["help", "/h, //help", "使い方を表示する", None],
         # ["all", "/a, //all", "すべて出力"],
-        ["help", "-?, --help", "使い方を表示する", None],
-        ["all", "-a, --all", "すべて出力"],
+        ("help", "-?, --help", "使い方を表示する", None),
+        ("all", "-a, --all", "すべて出力"),
         # ["date", "-d, --date", "対象日//<年/月/日>", cl.date],
-        ["date", "-d, --date", "対象日//<年/月/日>", cl.date],
-        ["color", "-c, --color", "表示色//<color>", Color],
-        ["size", "-s, --size", "表示サイズを指定する//<縦x横>",
-            cl.sepalate_items(type=cl.int_literal, sep='x', count=0)],
-        ["ratio", "-r, --ratio", "比率を指定する//<比率>", float],
-        ["xtend", "-x, --extend", "特別な奴"],
-        ["expect", "-e, --expect", "紛らわしい奴"],
+        ("date", "-d, --date", "対象日//<年/月/日>", cf.date),
+        ("color", "-c, --color", "表示色//<color>", Color),
+        ("size", "-s, --size", "表示サイズを指定する//<縦x横>",
+            cf.sepalate_items(type=cf.int_literal, sep='x', count=0)),
+        ("ratio", "-r, --ratio", "比率を指定する//<比率>", float),
+        ("xtend", "-x, --extend", "特別な奴"),
+        ("expect", "-e, --expect", "紛らわしい奴"),
 ]
 
 exclusive = ["all", "ratio"]

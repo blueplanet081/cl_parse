@@ -1,5 +1,6 @@
 import sys
 from lib import cl_parse as cl
+from lib import cl_parse_functions as cf
 
 
 args = sys.argv
@@ -8,11 +9,11 @@ if len(args) <= 1:
     args = 'this.py -a ABC --size=1024x480  --date 2021/10/3 # ---#'.split()
 
 options = [
-        ["help", "-h, --help", "使い方を表示する", None],
-        ["all", "-a, --all", "すべて出力"],
-        ["date", "-d, --date", "対象日//<年/月/日>", cl.strptime('%Y/%m/%d')],
-        ["size", "-s, --size", "表示サイズを指定する//<縦x横>",
-                               cl.sepalate_items(type=int, sep='x', count=0)],
+        ("help", "-h, --help", "使い方を表示する", None),
+        ("all", "-a, --all", "すべて出力"),
+        ("date", "-d, --date", "対象日//<年/月/日>", cf.strptime('%Y/%m/%d')),
+        ("size", "-s, --size", "表示サイズを指定する//<縦x横>",
+                               cf.sepalate_items(type=int, sep='x', count=0)),
 ]
 
 # cl_parse 呼び出し（解析実行）
