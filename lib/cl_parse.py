@@ -131,7 +131,7 @@ def count_prefix(text: str, prefix_char: str, max_count: int = 0) -> int:
     return count
 
 
-class NamedTupleLike:
+class LooseTuplet:
     def __init__(self, values: tuple[Any, ...] | Any, attr_names: Sequence[str]) -> None:
         ''' Tuple を NamedTuple みたいなものに変換する。注意！ attrは全部mutable。
             足りないvalue は None、余った分は overflowに格納
@@ -358,70 +358,110 @@ def check_blocktype(blk: Optional[str], prefix: str) -> Bt:
 # -----------------------------------------------------
 # 定義されたオプションセット格納用クラス
 # -----------------------------------------------------
+import dataclasses
+
+
+@dataclasses.dataclass
 class Opset:
-    def __init__(self, l_options: list[str], s_options: list[str],
-                 comment: str, acomment: str, afunc: Optional[list[Any]], atype: At) -> None:
-        """ オプションセット格納用クラス """
-        self.__l_options = l_options
-        self.__s_options = s_options
-        self.__comment = comment        # コメント
-        self.__acomment = acomment      # オプション引数のコメント
-        self.__afunc = afunc            # オプション引数の処理タイプ
-        self.__atype = atype            # オプション引数のタイプ
+    l_options: list[str]            # ロング名オプション文字列（リスト）
+    s_options: list[str]            # 1文字オプション文字列（リスト）
+    comment: str                    # コメント
+    acomment: str                   # オプション引数のコメント
+    afunc: Optional[list[Any]]      # オプション引数の処理タイプ
+    atype: At                       # オプション引数のタイプ
 
-        self.__isEnable: bool = False   # オプション有効/無効
-        self.__value: Any = None        # オプション引数
+    __isEnable: bool = dataclasses.field(default=False, init=False)     # オプション有効/無効
+    __value: Any = dataclasses.field(default=None, init=False)          # オプション引数
 
     @property
-    def l_options(self) -> list[str]:
-        return self.__l_options
-
-    @property
-    def s_options(self) -> list[str]:
-        return self.__s_options
-
-    @property
-    def comment(self) -> str:
-        return self.__comment
-
-    @property
-    def acomment(self) -> Any:
-        return self.__acomment
-
-    @property
-    def afunc(self) -> Optional[list[Any]]:
-        return self.__afunc
-
-    @property
-    def atype(self) -> At:
-        return self.__atype
-
-    @property
-    def isEnable(self) -> bool:
+    def isEnable(self) -> bool:             # オプションが有効（指定された）かどうか
         return self.__isEnable
 
     def _set_isEnable(self, isenable: bool):
         self.__isEnable = isenable
 
     @property
-    def value(self) -> Any:
+    def value(self) -> Any:                 # 指定されたオプション引数を取得する
         return self.__value
 
-    def _set_value(self, value: Any):
-        self.__value = value
-
-    def _store_value(self, value: Any):
-        if At.APPEND in self.__atype:
+    def _store_value(self, value: Any):     # 指定されたオプション引数を格納する
+        if At.APPEND in self.atype:
             if self.__value is None:
                 self.__value = []
             self.__value.append(value)
         else:
             self.__value = value
 
-    def _count_value(self, value: int):
+    def _count_value(self, value: int):     # 指定されたオプションをカウントする
         if self.__value is None:
             self.__value = 0
         self.__value += value
+
+
+# class Opset:
+#     def __init__(self, l_options: list[str], s_options: list[str],
+#                  comment: str, acomment: str, afunc: Optional[list[Any]], atype: At) -> None:
+#         """ オプションセット格納用クラス """
+#         self.__l_options = l_options
+#         self.__s_options = s_options
+#         self.__comment = comment        # コメント
+#         self.__acomment = acomment      # オプション引数のコメント
+#         self.__afunc = afunc            # オプション引数の処理タイプ
+#         self.__atype = atype            # オプション引数のタイプ
+
+#         self.__isEnable: bool = False   # オプション有効/無効
+#         self.__value: Any = None        # オプション引数
+
+#     @property
+#     def l_options(self) -> list[str]:
+#         return self.__l_options
+
+#     @property
+#     def s_options(self) -> list[str]:
+#         return self.__s_options
+
+#     @property
+#     def comment(self) -> str:
+#         return self.__comment
+
+#     @property
+#     def acomment(self) -> Any:
+#         return self.__acomment
+
+#     @property
+#     def afunc(self) -> Optional[list[Any]]:
+#         return self.__afunc
+
+#     @property
+#     def atype(self) -> At:
+#         return self.__atype
+
+#     @property
+#     def isEnable(self) -> bool:
+#         return self.__isEnable
+
+#     def _set_isEnable(self, isenable: bool):
+#         self.__isEnable = isenable
+
+#     @property
+#     def value(self) -> Any:
+#         return self.__value
+
+#     def _set_value(self, value: Any):
+#         self.__value = value
+
+#     def _store_value(self, value: Any):
+#         if At.APPEND in self.__atype:
+#             if self.__value is None:
+#                 self.__value = []
+#             self.__value.append(value)
+#         else:
+#             self.__value = value
+
+#     def _count_value(self, value: int):
+#         if self.__value is None:
+#             self.__value = 0
+#         self.__value += value
 
 
 # -----------------------------------------------------
@@ -541,7 +581,7 @@ class Parse:
             return text.isidentifier() and (not keyword.iskeyword(text))
 
         for iopset in options:
-            set = NamedTupleLike(iopset, ["opname", "opstrings", "comment", "actions"])
+            set = LooseTuplet(iopset, ["opname", "opstrings", "comment", "actions"])
 
             assert isinstance(set.opname, str), \
                 f'illegal type of option name(must be str) {set.opname} in {iopset}'
@@ -996,7 +1036,6 @@ if __name__ == '__main__':
             ("#オプション一覧"),
             ("help", "-h, -? ,  --help", "使い方を表示する", None),
             ("all", "-a, --all", "すべて出力"),
-            # ("all", "-a, --all", int),
             ("date", "-d, --date, <日付>", "作成日付（YYYY/MM/DD）", cf.date),
             ("color", "-c, --color, <color>", "表示色を指定する\n（RED,GREEN,BLUE,PURPLE,WHITE）",
                 Color),
